@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Toutes les équipes - {{ league.name }}{% endblock %}
+{% block content %}
+{% include "nav_league.html" with league_id=league.id user_id=request.user.id %}
+<style>
+.teams-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2.5rem;
+}
+.team-table-container {
+    flex: 1 1 48%;
+    min-width: 320px;
+    max-width: 48%;
+    box-sizing: border-box;
+}
+@media (max-width: 900px) {
+    .team-table-container { max-width: 100%; min-width: 0; }
+}
+</style>
+<div class="teams-grid">
+{% for team in teams_data %}
+    <div class="team-table-container">
+        <h2 style="font-size:1.1em;">Team: {{ team.player }}</h2>
+        <table class="table table-bordered table-striped">
+            <thead>
+                <tr>
+                    <th>Cyclist</th>
+                    <th>Team</th>
+                    <th>Price</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in team.cyclists %}
+                <tr>
+                    <td>{{ c.name }}</td>
+                    <td>{{ c.team }}</td>
+                    <td>{{ c.price }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="4">No cyclists in this team.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% empty %}
+    <p>No teams in this league.</p>
+{% endfor %}
+</div>
+{% endblock %} 

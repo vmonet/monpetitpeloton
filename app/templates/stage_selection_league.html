@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+{% load dict_get %}
+{% block title %}Sélection étape - {{ league.name }}{% endblock %}
+{% block content %}
+{% include "nav_league.html" with league_id=league.id user_id=request.user.id %}
+<form method="get" style="margin-bottom:1em;">
+  <label for="stage-select"><strong>Étape :</strong></label>
+  <select name="stage" id="stage-select" onchange="this.form.submit()">
+    {% for s in stages %}
+      <option value="{{ s.id }}" {% if s.id == stage.id %}selected{% endif %}>{{ s.name }} ({{ s.date }})</option>
+    {% endfor %}
+  </select>
+</form>
+{% if form.errors %}
+  <div class="alert alert-danger">
+    <ul>
+      {% for field, errors in form.errors.items %}
+      {% if field == '__all__' %}
+        {% for error in errors %}
+          <li>{{ error }}</li>
+        {% endfor %}
+        {% endif %}
+      {% endfor %}
+    </ul>
+  </div>
+{% endif %}
+{% if locked %}
+  <div class="alert alert-warning">La sélection est verrouillée pour cette étape (après 12h le jour de l'étape).</div>
+{% endif %}
+
+<form method="post" id="stage-selection-form">
+  {% csrf_token %}
+  <input type="hidden" name="stage" value="{{ stage.id }}" />
+  <div class="two-cols" style="display:flex;gap:2em;align-items:flex-start;">
+    <div class="col-left" style="flex:2;min-width:0;">
+      <h3>Mes coureurs disponibles</h3>
+      <ul style="list-style:none;padding:0;">
+        {% for rider in form.fields.riders.queryset %}
+        <li style="display:flex;align-items:center;gap:1em;">
+          <label style="margin-bottom:0;">
+            <input type="checkbox" name="riders" value="{{ rider.id }}" class="rider-checkbox" {% if form.initial.riders and rider in form.initial.riders %}checked{% endif %} {% if locked %}disabled{% endif %} />
+            {{ rider.name }} <small>({{ rider.team }})</small>
+          </label>
+          <div class="role-tags" data-rider="{{ rider.id }}">
+            {% for role in roles %}
+              <span class="role-tag badge {% if initial_roles and initial_roles|dict_get:rider.id == role.id %}bg-info{% else %}bg-secondary{% endif %}" data-role="{{ role.id }}" style="cursor:pointer;">{{ role.label }}</span>
+            {% endfor %}
+            <input type="hidden" name="role_{{ rider.id }}" value="{% if initial_roles %}{{ initial_roles|dict_get:rider.id }}{% endif %}" />
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+      <h4>Bonus pour cette étape</h4>
+      {% if bonuses %}
+  <div class="alert alert-info" style="margin-bottom:1em;">
+    <strong>Bonus déjà utilisés :</strong>
+    <ul style="margin-bottom:0;">
+      {% for bonus in bonuses %}
+        {% if used_bonuses|dict_get:bonus.id %}
+          <li>
+            {{ bonus.name }} :
+            utilisé à l'étape
+            {% for stage in used_bonuses|dict_get:bonus.id %}
+              {{ stage.name }}{% if not forloop.last %}, {% endif %}
+            {% endfor %}
+          </li>
+        {% endif %}
+      {% endfor %}
+      {% if not any_bonus_used %}
+        <li><em>Aucun bonus utilisé pour l'instant.</em></li>
+      {% endif %}
+    </ul>
+    <strong>Bonus disponibles :</strong>
+    <ul style="margin-bottom:0;">
+      {% for bonus in bonuses %}
+        <li>{{ bonus.name }} : {{ available_bonuses|dict_get:bonus.id }} disponible(s)</li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endif %}
+      <div id="bonus-tags" style="margin-bottom:1em;">
+        {% for bonus in bonuses %}
+          {% if available_bonuses|dict_get:bonus.id > 0 or bonus.id in selected_bonus_ids_for_stage %}
+            <span class="bonus-tag badge {% if bonus.id in selected_bonus_ids_for_stage %}bg-info{% else %}bg-secondary{% endif %}" data-bonus="{{ bonus.id }}" style="cursor:pointer;margin-right:0.5em;">{{ bonus.name }}</span>
+          {% endif %}
+        {% endfor %}
+      </div>
+      <input type="hidden" name="selected_bonuses" id="selected-bonuses" value="{% for id in selected_bonus_ids_for_stage %}{{ id }}{% if not forloop.last %},{% endif %}{% endfor %}" />
+      <button type="submit" class="btn btn-primary" style="margin-top:1em;" {% if locked %}disabled{% endif %}>Valider la sélection</button>
+    </div>
+    <div class="col-right" style="flex:1;min-width:0;">
+      <h3>Ma sélection pour l'étape</h3>
+      <table class="table table-bordered" style="width:100%;margin-bottom:1em;">
+        <thead>
+          <tr>
+            <th>Rôle</th>
+            <th>Coureur</th>
+            <th>Équipe</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for rider in display_riders %}
+            <tr>
+              {% if rider %}
+                <td>
+                  {% for role in roles %}
+                    {% if initial_roles and initial_roles|dict_get:rider.id == role.id %}
+                      {{ role.label }}
+                    {% endif %}
+                  {% endfor %}
+                </td>
+                <td>{{ rider.name }}</td>
+                <td>{{ rider.team }}</td>
+              {% else %}
+                <td></td><td></td><td></td>
+              {% endif %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <h4>Bonus sélectionnés pour cette étape</h4>
+      <ul style="list-style:none;padding:0;">
+        {% if selected_bonuses_for_stage %}
+          {% for sb in selected_bonuses_for_stage %}
+            <li><span class="badge bg-success">{{ sb.bonus.name }}{% if sb.count > 1 %} x{{ sb.count }}{% endif %}</span></li>
+          {% endfor %}
+        {% else %}
+          <li><em>Aucun bonus sélectionné pour cette étape.</em></li>
+        {% endif %}
+      </ul>
+    </div>
+  </div>
+</form>
+<script>
+function updateRoleTags() {
+  // Désactive les tags de rôle déjà sélectionnés ailleurs
+  const selectedRoles = {};
+  document.querySelectorAll('.role-tags').forEach(div => {
+    const selected = div.querySelector('input[type="hidden"]').value;
+    if (selected) {
+      selectedRoles[selected] = (selectedRoles[selected] || 0) + 1;
+    }
+  });
+  document.querySelectorAll('.role-tags').forEach(div => {
+    const current = div.querySelector('input[type="hidden"]').value;
+    div.querySelectorAll('.role-tag').forEach(tag => {
+      const role = tag.getAttribute('data-role');
+      if (role && role !== current && selectedRoles[role]) {
+        tag.classList.add('disabled');
+        tag.style.pointerEvents = 'none';
+        tag.classList.remove('bg-info');
+        tag.classList.add('bg-secondary');
+      } else {
+        tag.classList.remove('disabled');
+        tag.style.pointerEvents = '';
+      }
+    });
+  });
+}
+document.querySelectorAll('.role-tags').forEach(div => {
+  div.querySelectorAll('.role-tag').forEach(tag => {
+    tag.addEventListener('click', function() {
+      if (tag.classList.contains('disabled')) return;
+      const hidden = div.querySelector('input[type="hidden"]');
+      const role = tag.getAttribute('data-role');
+      if (hidden.value == role) {
+        // Unselect if already selected
+        hidden.value = '';
+        tag.classList.remove('bg-info');
+        tag.classList.add('bg-secondary');
+      } else {
+        div.querySelectorAll('.role-tag').forEach(t => t.classList.remove('bg-info'));
+        div.querySelectorAll('.role-tag').forEach(t => t.classList.add('bg-secondary'));
+        tag.classList.remove('bg-secondary');
+        tag.classList.add('bg-info');
+        hidden.value = role;
+      }
+      updateRoleTags();
+    });
+  });
+});
+document.addEventListener('DOMContentLoaded', updateRoleTags);
+
+// Gestion des tags de bonus pour l'étape courante
+const bonusTags = document.querySelectorAll('.bonus-tag');
+const selectedBonusesInput = document.getElementById('selected-bonuses');
+let selectedBonuses = selectedBonusesInput.value ? selectedBonusesInput.value.split(',') : [];
+bonusTags.forEach(tag => {
+  tag.addEventListener('click', function() {
+    const bonusId = tag.getAttribute('data-bonus');
+    if (tag.classList.contains('bg-info')) {
+      // Si déjà sélectionné, on désélectionne
+      tag.classList.remove('bg-info');
+      tag.classList.add('bg-secondary');
+      selectedBonuses = [];
+    } else {
+      // Désélectionner tous les autres
+      bonusTags.forEach(t => {
+        t.classList.remove('bg-info');
+        t.classList.add('bg-secondary');
+      });
+      // Sélectionner celui-ci
+      tag.classList.remove('bg-secondary');
+      tag.classList.add('bg-info');
+      selectedBonuses = [bonusId];
+    }
+    selectedBonusesInput.value = selectedBonuses.join(',');
+  });
+});
+</script>
+{% endblock %}

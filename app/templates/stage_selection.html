@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Stage Selection - {{ stage.name }}{% endblock %}
+{% block content %}
+<h1>Stage Selection: {{ stage.name }}</h1>
+<p><strong>Date:</strong> {{ stage.date }}</p>
+<p><strong>Competition:</strong> {{ stage.competition.name }}</p>
+<p><strong>Max riders:</strong> 8</p>
+{% if locked %}
+  <div class="alert alert-warning">Selection is locked for this stage (after 12:00 PM on {{ stage.date }}).</div>
+{% endif %}
+<form method="post">
+  {% csrf_token %}
+  <fieldset {% if locked %}disabled{% endif %}>
+    <legend>Select up to 8 riders from your validated team:</legend>
+    {{ form.riders }}
+    <br>
+    <button type="submit" class="btn btn-primary" {% if locked %}disabled{% endif %}>Save Selection</button>
+  </fieldset>
+</form>
+{% if selection %}
+  <h3>Your current selection for this stage:</h3>
+  <ul>
+    {% for rider in selection.riders.all %}
+      <li>{{ rider.name }} ({{ rider.team }})</li>
+    {% endfor %}
+  </ul>
+{% endif %}
+{% endblock %} 

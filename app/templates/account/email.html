@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% load widget_tweaks %}
+{% block title %}Mes emails{% endblock %}
+{% block content %}
+<div class="container" style="max-width:500px;margin:2rem auto;">
+  <h1 class="mb-4">Mes emails</h1>
+  {% if user.is_authenticated %}
+    <form method="post" action="">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <div class="mb-3">
+        <label for="id_email" class="form-label">Ajouter un email</label>
+        {{ form.email|add_class:"form-control" }}
+        {{ form.email.errors }}
+      </div>
+      <button type="submit" class="btn btn-primary">Ajouter</button>
+    </form>
+    <h2 class="mt-4" style="font-size:1.1em;">Emails enregistrés</h2>
+    <ul class="list-group mb-3">
+      {% for emailaddress in emailaddress_list %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          {{ emailaddress.email }}
+          {% if emailaddress.primary %}<span class="badge bg-success">Principal</span>{% endif %}
+          {% if not emailaddress.verified %}<span class="badge bg-warning text-dark">Non vérifié</span>{% endif %}
+          <span>
+            {% if not emailaddress.primary %}
+              <form method="post" action="{% url 'account_email' %}" style="display:inline;">
+                {% csrf_token %}
+                <input type="hidden" name="email" value="{{ emailaddress.email }}">
+                <button name="action_primary" class="btn btn-sm btn-outline-success">Définir principal</button>
+              </form>
+            {% endif %}
+            <form method="post" action="{% url 'account_email' %}" style="display:inline;">
+              {% csrf_token %}
+              <input type="hidden" name="email" value="{{ emailaddress.email }}">
+              <button name="action_send" class="btn btn-sm btn-outline-info">Renvoyer confirmation</button>
+            </form>
+            {% if not emailaddress.primary %}
+              <form method="post" action="{% url 'account_email' %}" style="display:inline;">
+                {% csrf_token %}
+                <input type="hidden" name="email" value="{{ emailaddress.email }}">
+                <button name="action_remove" class="btn btn-sm btn-outline-danger">Supprimer</button>
+              </form>
+            {% endif %}
+          </span>
+        </li>
+      {% empty %}
+        <li class="list-group-item">Aucun email enregistré.</li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>Vous devez être connecté pour gérer vos emails.</p>
+  {% endif %}
+</div>
+{% endblock %} 

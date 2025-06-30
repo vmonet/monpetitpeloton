@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Statut des équipes - {{ league.name }}{% endblock %}
+{% block content %}
+{% include "nav_league.html" with league_id=league.id user_id=request.user.id %}
+{% if not league.is_active %}
+    {% if request.user == league.creator %}
+        <div style="background:#ffeeba;color:#856404;padding:1rem;margin-bottom:1rem;border-radius:6px;border:1px solid #ffeeba;">
+            ⚠️ This league is not active yet. When you are ready, activate the league to open team selection and auctions.<br>
+            <form method="post" action="{% url 'league_activate' league.id %}" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit" style="margin-top:1rem;padding:0.5rem 2rem;font-weight:bold;">Activate League</button>
+            </form>
+        </div>
+    {% else %}
+        <div style="background:#ffeeba;color:#856404;padding:1rem;margin-bottom:1rem;border-radius:6px;border:1px solid #ffeeba;">
+            ⏳ The league is not active yet. Please wait for the creator to activate it.<br>
+            You can join the league, but team selection will open once the league is activated.
+        </div>
+    {% endif %}
+{% endif %}
+<p>Round Number: {{ current_round }}</p>
+<!-- <div class="actions mb-3">
+    <a href="{% url 'team_create' league.id %}">⬅️ Back to team creation</a>
+</div> -->
+<div class="table-responsive">
+<table class="table table-striped align-middle">
+    <thead class="table-light">
+        <tr>
+            <th>Username</th>
+            <th>Submitted?</th>
+            <th>Cyclists</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for entry in status_list %}
+        <tr>
+            <td>{{ entry.username }}</td>
+            <td>
+                {% if entry.finished %}
+                    <span class="badge bg-success">Finished</span>
+                {% elif entry.submitted %}
+                    <span class="badge bg-success">Yes</span>
+                {% else %}
+                    <span class="badge bg-danger">No</span>
+                {% endif %}
+            </td>
+            <td>
+                {{ entry.team_cyclist_count }}
+            </td>
+            <td>
+                {% if entry.user_id == current_user_id and not entry.submitted %}
+                    <a href="{% url 'team_create' league.id %}">⚙️ Submit your team now</a>
+                {% elif entry.user_id == current_user_id %}
+                    <a href="{% url 'team_create' league.id %}">⚙️ Update your team</a>
+                {% endif %}
+                {% if request.user.is_superuser %}
+                    <a href="{% url 'admin_team_edit' league.id entry.user_id %}" style="margin-left:0.5em;">🛠️ Edit team</a>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

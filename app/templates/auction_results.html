@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Résultats des enchères - {{ league.name }}{% endblock %}
+{% block content %}
+{% include "nav_league.html" with league_id=league.id user_id=request.user.id %}
+<h1>Résultats des enchères - {{ league.name }}</h1>
+<style>
+  .row-won > td {
+    background: #4fc26a !important;
+  }
+</style>
+<div style="margin-bottom:1em;">
+  <input type="text" id="auction-search" class="form-control" placeholder="Rechercher..." style="max-width:350px;display:inline-block;" />
+</div>
+<table class="table table-bordered" id="auction-table">
+  <thead>
+    <tr>
+      <th>Coureur</th>
+      <th>Joueur</th>
+      <th>Prix</th>
+      <th>Round</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for bid in flat_bids %}
+    <tr{% if bid.status == 'won' %} class="row-won"{% endif %}>
+      <td>{{ bid.cyclist.name }} <small>({{ bid.cyclist.team }})</small></td>
+      <td>{{ bid.player }}</td>
+      <td>{{ bid.price }}</td>
+      <td>{{ bid.round }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<script>
+  document.getElementById('auction-search').addEventListener('input', function() {
+    const filter = this.value.toLowerCase();
+    const rows = document.querySelectorAll('#auction-table tbody tr');
+    rows.forEach(row => {
+      const text = row.textContent.toLowerCase();
+      row.style.display = text.includes(filter) ? '' : 'none';
+    });
+  });
+</script>
+{% endblock %} 

@@ -1,0 +1,429 @@
+{% extends "base.html" %}
+{% block title %}Créer/Modifier mon équipe - {{ league.name }}{% endblock %}
+{% block content %}
+{% load static %}
+{% load dict_get %}
+{% include "nav_league.html" with league_id=league.id user_id=request.user.id %}
+{% if not editing_allowed and not league.is_active %}
+<div style="background: #ffeeba; color: #856404; padding: 1rem; margin-bottom: 1rem; border-radius: 6px; border: 1px solid #ffeeba;">
+    ⏳ The league is not active yet. Team selection will be possible once the creator activates the league.
+</div>
+{% endif %}
+<!-- <div style="margin-bottom:1rem;">
+    <a href="{% url 'league_team_status' league.id %}">🔍 View team status for this league</a>
+</div> -->
+<div class="budget-info">
+    Budget initial : <span id="budget">{{ budget }}</span> |
+    Budget restant : <span id="remaining-budget">{{ remaining_budget }}</span> |
+    Spent: <span id="spent">0</span>
+    <span id="total-cyclists-info" style="margin-left:1em;"></span>
+</div>
+<div class="error" id="error-msg" style="display:none;"></div>
+<div class="success" id="success-msg" style="display:none;"></div>
+{% if admin_mode %}
+<div style="background: #ffeeba; color: #856404; padding: 1rem; margin-bottom: 1rem; border-radius: 6px; border: 1px solid #ffeeba;">
+    ⚠️ You are editing as admin on behalf of user: <strong>{{ target_user.username }}</strong>
+</div>
+{% endif %}
+{% if not editing_allowed and league.is_active %}
+<div style="background: #f8d7da; color: #721c24; padding: 1rem; margin-bottom: 1rem; border-radius: 6px; border: 1px solid #f5c6cb;">
+    🚫 Team editing is locked: the auction has been resolved for your team.
+</div>
+{% endif %}
+<style>
+.two-cols {
+    display: flex;
+    gap: 2rem;
+    align-items: flex-start;
+}
+.col-left, .col-right {
+    flex: 1;
+    min-width: 0;
+}
+@media (max-width: 900px) {
+    .two-cols { flex-direction: column; }
+}
+.trash-btn {
+    background: none;
+    border: none;
+    color: #b00;
+    font-size: 1.2em;
+    cursor: pointer;
+    padding: 0 0.5em;
+    float: right;
+}
+.price-input-cell {
+    text-align: right;
+}
+.error {
+    background: #f8d7da;
+    color: #b00;
+    border: 1px solid #f5c6cb;
+    padding: 0.75em 1em;
+    border-radius: 6px;
+    margin-bottom: 1em;
+}
+.success {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+    padding: 0.75em 1em;
+    border-radius: 6px;
+    margin-bottom: 1em;
+}
+</style>
+<div class="two-cols">
+    <div class="col-left" id="available-cyclists">
+        <h2>Available Cyclists</h2>
+        <input type="text" id="cyclist-search" placeholder="Search cyclists..." style="width:100%;margin-bottom:1rem;" />
+        <table class="table table-striped table-bordered" style="width:100%;">
+            <thead>
+                <tr>
+                    <th id="sort-cyclist" style="cursor:pointer;">Cyclist <span id="sort-cyclist-icon">⇅</span></th>
+                    <th id="sort-team" style="cursor:pointer;">Team <span id="sort-team-icon">⇅</span></th>
+                    <th id="sort-price" style="cursor:pointer;">Price <span id="sort-price-icon">⇅</span></th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for cyclist in cyclists %}
+                <tr class="cyclist-row" data-id="{{ cyclist.id }}" data-name="{{ cyclist.name }}" data-value="{{ cyclist.value }}">
+                    <td>{{ cyclist.name }}</td>
+                    <td>{{cyclist.team}}</td>
+                    <td>{{ cyclist.value }}</td>
+                    <td>
+                        {% with locked=locked_cyclists|dict_get:cyclist.id %}
+                            {% if locked %}
+                                <span style="color:#b00;font-weight:bold;">🔒</span>
+                                <!-- <span style="color:#b00;font-weight:bold;">🔒 déjà dans l'équipe {{ locked|dict_get:'assigned_to' }}</span> -->
+                                <button class="add-cyclist btn btn-sm btn-success" hidden></button>
+                            {% else %}
+                                <button class="add-cyclist btn btn-sm btn-success" {% if locked_cyclists|dict_get:cyclist.id %}disabled{% endif %}>➕</button>
+                            {% endif %}
+                        {% endwith %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="col-right">
+        <h2>My Team</h2>
+        {% if team_cyclists %}
+        <div style="margin-bottom:1rem;">
+            <table class="table table-bordered" style="width:100%;margin-bottom:0.5rem;">
+                <thead>
+                    <tr>
+                        <th>Cyclist</th>
+                        <th style="width:110px;">Bid Price</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for c in team_cyclists %}
+                    <tr><td>{{ c.name }} (min: {{ c.value }})</td><td>{{ c.price }}</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+        <h3>Current Round Selection</h3>
+        <div id="selected-count" style="margin-bottom:0.5rem; font-weight:bold;"></div>
+        <table class="table table-bordered" id="selected-cyclists-table" style="width:100%;">
+            <thead>
+                <tr>
+                    <th>Cyclist</th>
+                    <th style="width:110px;">Bid</th>
+                    <th style="width:40px;"></th>
+                </tr>
+            </thead>
+            <tbody id="selected-cyclists">
+                <!-- Selected cyclists will appear here as rows -->
+            </tbody>
+        </table>
+        <button id="submit-team" disabled>Submit Team</button>
+    </div>
+</div>
+{{ selected_cyclists|default:"[]"|json_script:"selected-cyclists-data" }}
+{{ locked_cyclists|default:"{}"|json_script:"locked-cyclists-data" }}
+<script id="team-cyclists-count" type="application/json">{{ team_cyclists|length }}</script>
+<div id="js-vars" data-editing-allowed="{% if editing_allowed %}true{% else %}false{% endif %}"></div>
+<script>
+const lockedCyclists = JSON.parse(document.getElementById('locked-cyclists-data').textContent);
+const editingAllowed = document.getElementById('js-vars').dataset.editingAllowed === 'true';
+// --- Prefill selected cyclists from Django context ---
+const selectedCyclistsData = JSON.parse(document.getElementById('selected-cyclists-data').textContent);
+// --- Team Selection State ---
+const budget = parseFloat(document.getElementById('budget').textContent);
+let selected = Array.isArray(selectedCyclistsData)
+    ? selectedCyclistsData.map(c => ({
+        id: c.id,
+        name: c.name,
+        value: c.value,
+        price: c.price,
+        team: c.team
+    }))
+    : [];
+const remaining_budget = parseFloat(document.getElementById('remaining-budget').textContent);
+const teamCyclistsCount = JSON.parse(document.getElementById('team-cyclists-count').textContent);
+
+// --- DOM Elements ---
+const availableCyclists = document.getElementById('available-cyclists');
+const selectedCyclists = document.getElementById('selected-cyclists');
+const spentElem = document.getElementById('spent');
+const errorMsg = document.getElementById('error-msg');
+const successMsg = document.getElementById('success-msg');
+const submitBtn = document.getElementById('submit-team');
+
+// --- Helper Functions ---
+function renderAvailableCyclists() {
+    document.querySelectorAll('#available-cyclists .cyclist-row').forEach(row => {
+        console.log(lockedCyclists);
+        const id = parseInt(row.dataset.id);
+        const btn = row.querySelector('.add-cyclist');
+        console.log(btn);
+        const nameCell = row.querySelectorAll('td')[0];
+        if (selected.some(c => c.id === id)) {
+            btn.disabled = true;
+            btn.textContent = '✔';
+            nameCell.style.color = '';
+        }
+        else if (lockedCyclists[id] == "{" || lockedCyclists[id] == "}" ) {
+            btn.disabled = !editingAllowed;
+            btn.textContent = '➕';
+            nameCell.style.color = '';
+        } else if (lockedCyclists[id]) {
+            btn.disabled = true;
+            btn.textContent = '✔';
+            nameCell.style.color = '#b00';
+        } else {
+            btn.disabled = !editingAllowed;
+            btn.textContent = '➕';
+            nameCell.style.color = '';
+        }
+    });
+}
+
+function renderSelected() {
+    const tbody = document.getElementById('selected-cyclists');
+    tbody.innerHTML = '';
+    selected.forEach((c, idx) => {
+        const tr = document.createElement('tr');
+        let inner = '';
+        if (c.status === 'won') {
+            tr.style.background = '#e2e3e5';
+            inner = `<td>${c.name} (min: ${c.value}) <span style='color:#b00;font-weight:bold;'>🔒 Assigned</span></td><td class='price-input-cell'><input type="number" min="${c.value}" value="${c.price}" class="price-input" data-idx="${idx}" style="width:70px; margin:0 8px; text-align:right;" disabled /></td><td></td>`;
+        } else if (c.status === 'lost') {
+            tr.style.background = '#f8f9fa';
+            inner = `<td>${c.name} (min: ${c.value}) <span style='color:#888;font-weight:bold;'>❌ Lost</span></td><td class='price-input-cell'><input type="number" min="${c.value}" value="${c.price}" class="price-input" data-idx="${idx}" style="width:70px; margin:0 8px; text-align:right;" disabled /></td><td></td>`;
+        } else {
+            inner = `<td>${c.name} (min: ${c.value})</td><td class='price-input-cell'><input type="number" min="${c.value}" value="${c.price}" class="price-input" data-idx="${idx}" style="width:70px; margin:0 8px; text-align:right;" ${editingAllowed ? '' : 'disabled'} /></td><td><button class="remove-cyclist trash-btn" data-idx="${idx}" ${editingAllowed ? '' : 'disabled'} title="Retirer">🗑️</button></td>`;
+        }
+        tr.innerHTML = inner;
+        tbody.appendChild(tr);
+    });
+    document.getElementById('selected-count').textContent = `Selected: ${selected.length}`;
+    updateSpent();
+    validate();
+    renderAvailableCyclists();
+    if (remaining_budget === 0 ) {
+        submitBtn.disabled = true;
+    }
+    // Affichage dynamique du total de coureurs
+    const teamCyclistsCount = window.teamCyclistsCount || 0;
+    document.getElementById('total-cyclists-info').textContent = `Total coureurs (équipe + sélection): ${teamCyclistsCount + selected.length}`;
+}
+
+function updateSpent() {
+    const total = selected.reduce((sum, c) => sum + parseFloat(c.price), 0);
+    spentElem.textContent = total.toFixed(2);
+}
+
+function validate() {
+    let valid = true;
+    let total = selected.reduce((sum, c) => sum + parseFloat(c.price), 0);
+    for (const c of selected) {
+        if (isNaN(c.price) || parseFloat(c.price) < c.value) {
+            valid = false;
+            break;
+        }
+    }
+    if (selected.length === 0) valid = false;
+    if (total !== remaining_budget) valid = false;
+    if (remaining_budget === 0 ) valid = false;
+    submitBtn.disabled = !valid || !editingAllowed;
+    return valid;
+}
+
+function showError(msg) {
+    errorMsg.textContent = msg;
+    errorMsg.style.display = '';
+    successMsg.style.display = 'none';
+}
+function showSuccess(msg) {
+    successMsg.textContent = msg;
+    successMsg.style.display = '';
+    errorMsg.style.display = 'none';
+}
+function clearMessages() {
+    errorMsg.style.display = 'none';
+    successMsg.style.display = 'none';
+}
+
+// --- Event Listeners ---
+availableCyclists.addEventListener('click', function(e) {
+    if (!editingAllowed) return;
+    if (e.target.classList.contains('add-cyclist')) {
+        const row = e.target.closest('.cyclist-row');
+        const id = parseInt(row.dataset.id);
+        if (selected.some(c => c.id === id)) return;
+        selected.push({
+            id: id,
+            name: row.dataset.name,
+            value: parseFloat(row.dataset.value),
+            price: parseFloat(row.dataset.value)
+        });
+        renderSelected();
+        clearMessages();
+    }
+});
+
+selectedCyclists.addEventListener('click', function(e) {
+    if (!editingAllowed) return;
+    if (e.target.classList.contains('remove-cyclist')) {
+        const idx = parseInt(e.target.dataset.idx);
+        selected.splice(idx, 1);
+        renderSelected();
+        clearMessages();
+    }
+});
+
+selectedCyclists.addEventListener('input', function(e) {
+    if (!editingAllowed) return;
+    if (e.target.classList.contains('price-input')) {
+        const idx = parseInt(e.target.dataset.idx);
+        let val = parseFloat(e.target.value);
+        if (isNaN(val) || val < selected[idx].value) {
+            e.target.style.borderColor = 'red';
+        } else {
+            e.target.style.borderColor = '';
+            selected[idx].price = val;
+            updateSpent();
+            validate();
+        }
+        clearMessages();
+    }
+});
+
+submitBtn.addEventListener('click', function() {
+    if (!editingAllowed) return;
+    if (!validate()) {
+        showError('Please check your selection and prices.');
+        return;
+    }
+    submitBtn.disabled = true;
+    fetch(window.location.pathname, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({cyclists: selected.map(c => ({id: c.id, price: c.price}))})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showSuccess('Team submitted successfully!');
+        } else {
+            showError(data.error || 'Submission failed.');
+        }
+        submitBtn.disabled = false;
+    })
+    .catch(() => {
+        showError('Network error.');
+        submitBtn.disabled = false;
+    });
+});
+
+// --- CSRF Helper ---
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// --- On page load, render prefilled selection if any ---
+window.teamCyclistsCount = teamCyclistsCount;
+renderSelected();
+renderAvailableCyclists();
+
+// --- Cyclist search filter ---
+const searchInput = document.getElementById('cyclist-search');
+searchInput.addEventListener('input', function() {
+    const query = this.value.toLowerCase();
+    document.querySelectorAll('#available-cyclists .cyclist-row').forEach(row => {
+        const name = row.dataset.name.toLowerCase();
+        row.style.display = name.includes(query) ? '' : 'none';
+    });
+});
+
+// --- Table sorting for available cyclists ---
+function sortTableBy(col, type, asc=true) {
+    const table = document.querySelector('#available-cyclists table');
+    const tbody = table.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    rows.sort((a, b) => {
+        let v1, v2;
+        if (col === 0) { // Cyclist
+            v1 = a.querySelectorAll('td')[0].textContent.trim().toLowerCase();
+            v2 = b.querySelectorAll('td')[0].textContent.trim().toLowerCase();
+        } else if (col === 1) { // Team
+            v1 = a.querySelectorAll('td')[1].textContent.trim().toLowerCase();
+            v2 = b.querySelectorAll('td')[1].textContent.trim().toLowerCase();
+        } else if (col === 2) { // Price
+            v1 = parseFloat(a.querySelectorAll('td')[2].textContent.trim());
+            v2 = parseFloat(b.querySelectorAll('td')[2].textContent.trim());
+        }
+        if (v1 < v2) return asc ? -1 : 1;
+        if (v1 > v2) return asc ? 1 : -1;
+        return 0;
+    });
+    rows.forEach(row => tbody.appendChild(row));
+}
+
+let sortState = {col: null, asc: true};
+
+document.getElementById('sort-cyclist').addEventListener('click', function() {
+    sortState.asc = sortState.col === 0 ? !sortState.asc : true;
+    sortState.col = 0;
+    sortTableBy(0, 'str', sortState.asc);
+    document.getElementById('sort-cyclist-icon').textContent = sortState.asc ? '↑' : '↓';
+    document.getElementById('sort-team-icon').textContent = '⇅';
+    document.getElementById('sort-price-icon').textContent = '⇅';
+});
+document.getElementById('sort-team').addEventListener('click', function() {
+    sortState.asc = sortState.col === 1 ? !sortState.asc : true;
+    sortState.col = 1;
+    sortTableBy(1, 'str', sortState.asc);
+    document.getElementById('sort-cyclist-icon').textContent = '⇅';
+    document.getElementById('sort-team-icon').textContent = sortState.asc ? '↑' : '↓';
+    document.getElementById('sort-price-icon').textContent = '⇅';
+});
+document.getElementById('sort-price').addEventListener('click', function() {
+    sortState.asc = sortState.col === 2 ? !sortState.asc : true;
+    sortState.col = 2;
+    sortTableBy(2, 'num', sortState.asc);
+    document.getElementById('sort-cyclist-icon').textContent = '⇅';
+    document.getElementById('sort-team-icon').textContent = '⇅';
+    document.getElementById('sort-price-icon').textContent = sortState.asc ? '↑' : '↓';
+});
+</script>
+{% endblock %}

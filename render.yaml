@@ -1,0 +1,22 @@
+databases:
+  - name: mpp-db
+    plan: free
+    databaseName: mpp_db_zahj
+    user: mpp_db_zahj_user
+
+services:
+  - type: web
+    plan: free
+    name: monpetitpeloton
+    runtime: python
+    buildCommand: './build.sh'
+    startCommand: 'python -m gunicorn monpetitpeloton.asgi:application -k uvicorn.workers.UvicornWorker'
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: mpp-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: WEB_CONCURRENCY
+        value: 4

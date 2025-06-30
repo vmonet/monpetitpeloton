@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% load dict_get %}
+{% block title %}Peloton - {{ league.name }}{% endblock %}
+{% block content %}
+{% include "nav_league.html" with league_id=league.id user_id=request.user.id %}
+<form method="get" style="margin-bottom:1em;">
+  <label for="stage-select"><strong>Étape :</strong></label>
+  <select name="stage" id="stage-select" onchange="this.form.submit()">
+    {% for s in stages %}
+      <option value="{{ s.id }}" {% if s.id == stage.id %}selected{% endif %}>{{ s.name }} ({{ s.date }})</option>
+    {% endfor %}
+  </select>
+</form>
+<div class="row">
+  {% for team in teams %}
+    <div class="col" style="margin-bottom:2em;min-width:25%;">
+      <h3>{{ team.player.username }}</h3>
+      <ul style="list-style:none;padding:0;">
+        {% with selection=selections|dict_get:team.id %}
+          {% if selection %}
+            {% for item in selection %}
+              <li>
+                {{ item.cyclist.name }} <small>({{ item.cyclist.team }})</small>
+                {% if item.role %}
+                  <span class="badge bg-info" style="margin-left:0.5em;">{{ item.role.label }}</span>
+                {% endif %}
+              </li>
+            {% endfor %}
+          {% else %}
+            <li><em>Aucune sélection pour cette étape.</em></li>
+          {% endif %}
+        {% endwith %}
+      </ul>
+    </div>
+  {% endfor %}
+</div>
+{% endblock %} 

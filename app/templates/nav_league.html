@@ -1,0 +1,33 @@
+<nav class="mb-3">
+  <ul class="nav nav-pills">
+    <!-- <li class="nav-item">
+      <a class="nav-link" href="{% url 'league_create' %}">Créer une ligue</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" href="{% url 'league_join' %}">Rejoindre une ligue</a>
+    </li> -->
+    {% if league_id %}
+    <li class="nav-item" style="background-color: yellow;color: black;">
+      <a class="nav-link" style="color: black">  {{ league.name }} >> </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link {% if request.resolver_match.url_name == 'league_teams_list' %}active{% endif %}" href="{% url 'league_teams_list' league_id %}">Teams</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link {% if request.resolver_match.url_name == 'league_team_status' %}active{% endif %}" href="{% url 'league_team_status' league_id %}">Auctions Status</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link {% if request.resolver_match.url_name == 'team_create' %}active{% endif %}" href="{% url 'team_create' league_id %}">Auctions</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link {% if request.resolver_match.url_name == 'auction_results' %}active{% endif %}" href="{% url 'auction_results' league_id %}">Auctions Result</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link {% if request.resolver_match.url_name == 'stage_selection_league' %}active{% endif %}" href="{% url 'stage_selection_league' league_id %}">Sélection étape</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link {% if request.resolver_match.url_name == 'peloton_view' %}active{% endif %}" href="{% url 'peloton_view' league_id %}">Peloton</a>
+    </li>
+    {% endif %}
+  </ul>
+</nav> 

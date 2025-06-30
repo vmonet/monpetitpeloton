@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Stages for {{ competition.name }}{% endblock %}
+
+{% block content %}
+  <h1>Stages for {{ competition.name }}</h1>
+  <div class="list-group">
+    {% for stage in stages %}
+      <a href="{% url 'stage_selection' stage.id %}" class="list-group-item list-group-item-action">
+        <strong>{{ stage.name }}</strong> - {{ stage.date|date:"F d, Y" }}
+      </a>
+    {% empty %}
+      <div class="list-group-item">No stages have been created for this competition yet.</div>
+    {% endfor %}
+  </div>
+  <a href="{% url 'competition_detail' competition.id %}" class="btn btn-secondary mt-3">← Back to Competition</a>
+{% endblock %} 

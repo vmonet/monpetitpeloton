@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Créer une league{% endblock %}
+{% block content %}
+<h1 style="text-align:center;">Créer une nouvelle league</h1>
+<form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Create League</button>
+</form>
+{% endblock %} 
