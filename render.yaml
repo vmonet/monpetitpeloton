@@ -1,6 +1,5 @@
 databases:
   - name: mpp-db
-    plan: free
     databaseName: mpp_db_zahj
     user: mpp_db_zahj_user
 
