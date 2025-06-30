@@ -5,7 +5,6 @@ databases:
 
 services:
   - type: web
-    plan: free
     name: monpetitpeloton
     runtime: python
     buildCommand: './build.sh'
