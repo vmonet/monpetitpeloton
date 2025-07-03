@@ -413,7 +413,8 @@ class LeagueAuctionResultsView(LoginRequiredMixin, View):
             if b['status'] == 'won':
                 max_price_by_cyclist[b['cyclist_id']] = max(max_price_by_cyclist[b['cyclist_id']], b['price'])
         # Ordonner : cycliste avec le prix d'achat max le plus élevé en premier, puis pour chaque cycliste, enchères décroissantes
-        flat_bids.sort(key=lambda b: (-max_price_by_cyclist.get(b['cyclist_id'], 0), b['cyclist'].name.lower(), -b['price']))
+        # en cas d'égalité d'enchères, le gagnant en premier
+        flat_bids.sort(key=lambda b: (-max_price_by_cyclist.get(b['cyclist_id'], 0), b['cyclist'].name.lower(), -b['price'], -1 if b['status'] == 'won' else 1))
         return render(request, 'auction_results.html', {
             'league': league,
             'flat_bids': flat_bids,
