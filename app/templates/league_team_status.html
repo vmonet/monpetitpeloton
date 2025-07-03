@@ -29,6 +29,7 @@
             <th>Username</th>
             <th>Submitted?</th>
             <th>Cyclists</th>
+            <th>Remaining Budget</th>
             <th>Actions</th>
         </tr>
     </thead>
@@ -47,6 +48,9 @@
             </td>
             <td>
                 {{ entry.team_cyclist_count }}
+            </td>
+            <td>
+                {{ entry.remaining_budget }}
             </td>
             <td>
                 {% if entry.user_id == current_user_id and not entry.submitted %}

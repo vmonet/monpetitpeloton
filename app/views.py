@@ -170,6 +170,7 @@ class LeagueTeamStatusView(View):
                 'cyclist_count': cyclist_count,
                 'team_cyclist_count': team_cyclist_count,
                 'user_id': user.id,
+                'remaining_budget': remaining_budget,
             })
         return render(request, 'league_team_status.html', {
             'league': league,
