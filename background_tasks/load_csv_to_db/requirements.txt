@@ -1,0 +1,2 @@
+google-cloud-storage
+# Ajouter ici les dépendances nécessaires pour accéder à la BDD 

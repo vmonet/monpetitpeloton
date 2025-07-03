@@ -8,7 +8,7 @@
 
 ## Resultats
 
-- Créer une 2 base de données Render
+- DONE Créer une 2 base de données Render
 - Bucket GCP pour stocker les résultats html
 - Script pour charger le html, le parser en CSV et stocker le résultats dans GCP --> déploiement via une cloud fonction
 - Script pour envoyer le CSV dans un modèle de la BDD --> déploiement via une cloud fonction
