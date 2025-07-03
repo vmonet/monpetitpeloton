@@ -388,8 +388,6 @@ class HomepageView(LoginRequiredMixin, View):
 class LeagueAuctionResultsView(LoginRequiredMixin, View):
     def get(self, request, league_id):
         league = get_object_or_404(League, id=league_id)
-        if league.auction_finished is not True:
-            return HttpResponseForbidden("Les résultats d'enchères ne sont pas accessibles tant que toutes les enchères ne sont pas terminées.")
         if not Team.objects.filter(player=request.user, league=league).exists():
             return HttpResponseForbidden("You are not a member of this league.")
         # Récupérer toutes les enchères de la ligue, tous rounds confondus
@@ -407,6 +405,7 @@ class LeagueAuctionResultsView(LoginRequiredMixin, View):
                 'status': bid.status,
             }
             for bid in all_bids
+            if bid.status in ('won', 'lost', 'Won', 'Lost')
         ]
         # Pour chaque cycliste, trouver le prix d'achat max (enchère gagnante)
         max_price_by_cyclist = defaultdict(float)
