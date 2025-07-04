@@ -23,7 +23,11 @@
             <ul class="list-group list-group-flush">
                 {% for league in leagues %}
                 <li class="list-group-item">
-                    <a href="{% url 'league_team_status' league.id %}">{{ league.name }}</a>
+                    {% if league.auction_finished %}
+                      <a href="{% url 'stage_selection_league' league.id %}">{{ league.name }}</a>
+                    {% else %}
+                      <a href="{% url 'league_team_status' league.id %}">{{ league.name }}</a>
+                    {% endif %}
                     <span class="badge bg-secondary ms-2">{{ league.competition.name }}</span>
                 </li>
                 {% empty %}

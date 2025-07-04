@@ -83,6 +83,7 @@ class TeamCreateView(View):
             'locked_cyclists': locked_cyclists,
             'editing_allowed': editing_allowed,
             'team_cyclists': team_cyclists,
+            'auction_finished': league.auction_finished,
         })
 
     @csrf_exempt
@@ -199,7 +200,8 @@ class LeagueTeamStatusView(View):
             'league': league,
             'status_list': status_list,
             'current_user_id': request.user.id,
-            'current_round':current_round
+            'current_round':current_round,
+            'auction_finished': league.auction_finished,
         })
 
 
@@ -265,6 +267,7 @@ class AdminTeamEditView(View):
             'locked_cyclists': locked_cyclists,
             'editing_allowed': editing_allowed,
             'team_cyclists': team_cyclists,
+            'auction_finished': league.auction_finished,
         })
 
     @csrf_exempt
@@ -342,6 +345,7 @@ class LeagueTeamsListView(LoginRequiredMixin, View):
         return render(request, 'league_teams_list.html', {
             'league': league,
             'teams_data': teams_data,
+            'auction_finished': league.auction_finished,
         })
 
 class LeagueCreateForm(forms.ModelForm):
@@ -442,6 +446,7 @@ class LeagueAuctionResultsView(LoginRequiredMixin, View):
         return render(request, 'auction_results.html', {
             'league': league,
             'flat_bids': flat_bids,
+            'auction_finished': league.auction_finished,
         })
 
 class CompetitionStagesView(LoginRequiredMixin, View):
@@ -595,6 +600,7 @@ class StageSelectionLeagueView(LoginRequiredMixin, View):
             'selected_bonus_ids_for_stage': selected_bonus_ids_for_stage,
             'default_riders': default_riders,
             'default_roles': default_roles,
+            'auction_finished': league.auction_finished,
         })
 
     def post(self, request, league_id, *args, **kwargs):
@@ -789,6 +795,7 @@ class StageSelectionLeagueView(LoginRequiredMixin, View):
             'selected_bonus_ids_for_stage': selected_bonus_ids_for_stage,
             'default_riders': default_riders,
             'default_roles': default_roles,
+            'auction_finished': league.auction_finished,
         })
 
 class PelotonView(LoginRequiredMixin, View):
@@ -836,4 +843,5 @@ class PelotonView(LoginRequiredMixin, View):
             'stage': stage,
             'teams': teams,
             'selections': selections,
+            'auction_finished': league.auction_finished,
         })

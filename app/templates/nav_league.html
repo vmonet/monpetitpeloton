@@ -13,12 +13,14 @@
     <li class="nav-item">
       <a class="nav-link {% if request.resolver_match.url_name == 'league_teams_list' %}active{% endif %}" href="{% url 'league_teams_list' league_id %}">Teams</a>
     </li>
+    {% if not auction_finished %}
     <li class="nav-item">
-      <a class="nav-link {% if request.resolver_match.url_name == 'league_team_status' %}active{% endif %}" href="{% url 'league_team_status' league_id %}">Auctions Status</a>
+        <a class="nav-link {% if request.resolver_match.url_name == 'league_team_status' %}active{% endif %}" href="{% url 'league_team_status' league_id %}">Auctions Status</a>
     </li>
     <li class="nav-item">
-      <a class="nav-link {% if request.resolver_match.url_name == 'team_create' %}active{% endif %}" href="{% url 'team_create' league_id %}">Auctions</a>
+        <a class="nav-link {% if request.resolver_match.url_name == 'team_create' %}active{% endif %}" href="{% url 'team_create' league_id %}">Auctions</a>
     </li>
+    {% endif %}
     <li class="nav-item">
       <a class="nav-link {% if request.resolver_match.url_name == 'auction_results' %}active{% endif %}" href="{% url 'auction_results' league_id %}">Auctions Result</a>
     </li>
