@@ -366,3 +366,21 @@ class CompetitionCyclistConfirmation(models.Model):
 
     def __str__(self):
         return f"{self.cyclist} confirmé: {self.is_confirmed} pour {self.competition}"
+
+class DefaultStageSelection(models.Model):
+    team = models.ForeignKey('Team', on_delete=models.CASCADE, related_name='default_stage_selections')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Default selection for {self.team}" 
+
+class DefaultStageSelectionRider(models.Model):
+    default_selection = models.ForeignKey(DefaultStageSelection, on_delete=models.CASCADE, related_name='riders')
+    cyclist = models.ForeignKey('Cyclist', on_delete=models.CASCADE)
+    role = models.ForeignKey('Role', on_delete=models.SET_NULL, null=True, blank=True)
+
+    class Meta:
+        unique_together = ('default_selection', 'cyclist')
+
+    def __str__(self):
+        return f"{self.cyclist} as {self.role} in {self.default_selection}"

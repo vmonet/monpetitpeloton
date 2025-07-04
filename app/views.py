@@ -4,7 +4,7 @@ from django.views import View
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.utils.decorators import method_decorator
-from .models import Cyclist, Team, League, TeamCyclistAuction, User, Competition, LeagueAuction, TeamCyclist, LeagueRound, Stage, StageSelection, StageSelectionBonus, BonusConfig, Role, StageSelectionRider
+from .models import Cyclist, Team, League, TeamCyclistAuction, User, Competition, LeagueAuction, TeamCyclist, LeagueRound, Stage, StageSelection, StageSelectionBonus, BonusConfig, Role, StageSelectionRider, DefaultStageSelection, DefaultStageSelectionRider
 from django.views.decorators.csrf import csrf_exempt
 import json
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -505,34 +505,49 @@ class StageSelectionLeagueView(LoginRequiredMixin, View):
     Page for selecting the team for a stage in a league. Shows a stage selector, available riders (left), and current selection (right).
     """
     def get(self, request, league_id, *args, **kwargs):
-        league = get_object_or_404(League, id=league_id)
-        team = Team.objects.filter(player=request.user, league=league).first()
+        league = get_object_or_404(League.objects.select_related('competition'), id=league_id)
+        team = Team.objects.select_related('player', 'league').filter(player=request.user, league=league).first()
         if not team:
             return HttpResponseForbidden("You are not a member of this league.")
-        stages = Stage.objects.filter(competition=league.competition).order_by('date')
+        stages = list(Stage.objects.filter(competition=league.competition).order_by('date'))
         stage_id = request.GET.get('stage')
-        stage = get_object_or_404(Stage, id=stage_id) if stage_id else stages.first()
+        stage = get_object_or_404(Stage, id=stage_id) if stage_id else stages[0]
         roles = list(Role.objects.all().order_by('order'))
         unique_role_ids = list(Role.objects.filter(name__in=['Leader', 'Sprinteur', 'Grimpeur']).order_by('order').values_list('id', flat=True))
-        # Préremplir la sélection et les rôles
+        # --- Default selection logic with optimized queries ---
+        from .models import DefaultStageSelection, DefaultStageSelectionRider
+        default_selection = DefaultStageSelection.objects.prefetch_related(
+            Prefetch('riders', queryset=DefaultStageSelectionRider.objects.select_related('cyclist', 'role'))
+        ).filter(team=team).order_by('-created_at').first()
+        default_riders = []
+        default_roles = {}
+        if default_selection:
+            rider_role_order = {}
+            for sr in default_selection.riders.all():
+                default_roles[sr.cyclist.id] = sr.role.id if sr.role else ''
+                rider_role_order[sr.cyclist.id] = sr.role.order if sr.role else 999
+            default_riders = sorted(
+                [sr.cyclist for sr in default_selection.riders.all()],
+                key=lambda rider: rider_role_order.get(rider.id, 999)
+            )
+        # --- End default selection logic ---
+        # --- Stage selection logic with optimized queries ---
         selection = None
         initial_riders = []
         initial_roles = {}
-        if stage:
-            selection = StageSelection.objects.filter(team=team, stage=stage, validated=True).order_by('-submitted_at').first()
-            if not selection:
-                selection = StageSelection.objects.filter(team=team, stage=stage).order_by('-submitted_at').first()
-            if selection:
-                # Associer chaque rider à l'ordre de son rôle
-                rider_role_order = {}
-                for sr in selection.selection_riders.all():
-                    initial_roles[sr.cyclist.id] = sr.role.id if sr.role else ''
-                    rider_role_order[sr.cyclist.id] = sr.role.order if sr.role else 999
-                # Trier les riders selon l'ordre du rôle
-                initial_riders = sorted(
-                    [sr.cyclist for sr in selection.selection_riders.all()],
-                    key=lambda rider: rider_role_order.get(rider.id, 999)
-                )
+        stage_selection_qs = StageSelection.objects.prefetch_related(
+            Prefetch('selection_riders', queryset=StageSelectionRider.objects.select_related('cyclist', 'role'))
+        ).filter(team=team, stage=stage).order_by('-validated', '-submitted_at')
+        selection = next(iter(stage_selection_qs), None)
+        if selection:
+            rider_role_order = {}
+            for sr in selection.selection_riders.all():
+                initial_roles[sr.cyclist.id] = sr.role.id if sr.role else ''
+                rider_role_order[sr.cyclist.id] = sr.role.order if sr.role else 999
+            initial_riders = sorted(
+                [sr.cyclist for sr in selection.selection_riders.all()],
+                key=lambda rider: rider_role_order.get(rider.id, 999)
+            )
         form_initial = {'riders': initial_riders}
         form = StageSelectionForm(initial=form_initial, team=team, stage=stage, competition=league.competition)
         locked = False
@@ -540,11 +555,13 @@ class StageSelectionLeagueView(LoginRequiredMixin, View):
             now = timezone.localtime()
             lock_time = timezone.make_aware(datetime.combine(stage.date, dt_time(12, 0)))
             locked = now >= lock_time
-        # Prépare la liste des bonus utilisés et disponibles pour ce joueur dans la ligue
+        # --- Bonuses and validated selections optimized ---
         bonuses = list(BonusConfig.objects.filter(competition=league.competition))
         used_bonuses = {bonus.id: [] for bonus in bonuses}
         available_bonuses = {bonus.id: bonus.max_per_player for bonus in bonuses}
-        selections_validated = StageSelection.objects.filter(team=team, validated=True)
+        selections_validated = StageSelection.objects.filter(team=team, validated=True).prefetch_related(
+            Prefetch('stageselectionbonus_set', queryset=StageSelectionBonus.objects.select_related('bonus', 'stage_selection__stage'))
+        )
         for sel in selections_validated:
             for sb in sel.stageselectionbonus_set.all():
                 used_bonuses[sb.bonus.id].append(sel.stage)
@@ -553,16 +570,12 @@ class StageSelectionLeagueView(LoginRequiredMixin, View):
             if available_bonuses[bonus.id] < 0:
                 available_bonuses[bonus.id] = 0
         selected_bonuses_for_stage = []
-        if stage and team:
-            selection = StageSelection.objects.filter(team=team, stage=stage, validated=True).order_by('-submitted_at').first()
-            if not selection:
-                selection = StageSelection.objects.filter(team=team, stage=stage).order_by('-submitted_at').first()
-            if selection:
-                selected_bonuses_for_stage = list(selection.stageselectionbonus_set.all())
+        if selection:
+            selected_bonuses_for_stage = list(selection.stageselectionbonus_set.select_related('bonus').all())
         any_bonus_used = any(used_bonuses[bonus.id] for bonus in bonuses)
         selected_bonus_ids_for_stage = [sb.bonus.id for sb in selected_bonuses_for_stage]
-        # Après le tri de initial_riders
         display_riders = initial_riders[:8] + [None] * (8 - len(initial_riders))
+        # Pass default selection to template
         return render(request, 'stage_selection_league.html', {
             'league': league,
             'stages': stages,
@@ -580,6 +593,8 @@ class StageSelectionLeagueView(LoginRequiredMixin, View):
             'selected_bonuses_for_stage': selected_bonuses_for_stage,
             'any_bonus_used': any_bonus_used,
             'selected_bonus_ids_for_stage': selected_bonus_ids_for_stage,
+            'default_riders': default_riders,
+            'default_roles': default_roles,
         })
 
     def post(self, request, league_id, *args, **kwargs):
@@ -587,102 +602,161 @@ class StageSelectionLeagueView(LoginRequiredMixin, View):
         team = Team.objects.filter(player=request.user, league=league).first()
         if not team:
             return HttpResponseForbidden("You are not a member of this league.")
-        stages = Stage.objects.filter(competition=league.competition).order_by('date')
+        stages = list(Stage.objects.filter(competition=league.competition).order_by('date'))
         stage_id = request.POST.get('stage')
-        stage = get_object_or_404(Stage, id=stage_id) if stage_id else stages.first()
+        stage = get_object_or_404(Stage, id=stage_id) if stage_id else stages[0]
         roles = list(Role.objects.all().order_by('order'))
         unique_role_ids = list(Role.objects.filter(name__in=['leader', 'sprinteur', 'grimpeur']).order_by('order').values_list('id', flat=True))
         now = timezone.localtime()
         lock_time = timezone.make_aware(datetime.combine(stage.date, dt_time(12, 0)))
         if now >= lock_time:
             return HttpResponseForbidden("Selection is locked for this stage (after 12:00 PM).")
-        form = StageSelectionForm(request.POST, team=team, stage=stage, competition=league.competition)
-        # Récupère les rôles depuis le POST
-        rider_ids = request.POST.getlist('riders')
-        role_map = {}
-        for rider_id in rider_ids:
-            role_id = request.POST.get(f'role_{rider_id}', '')
-            if role_id:
-                role_map[int(rider_id)] = int(role_id)
-        errors = []
-        if len(rider_ids) != 8:
-            errors.append("You must select exactly 8 riders.")
-        # Nouvelle règle : au moins un coureur avec un rôle
-        if not role_map:
-            errors.append("You must assign at least one role to a rider.")
-        # Nouvelle règle : chaque rôle doit être attribué exactement une fois
-        role_ids_required = set(role.id for role in roles)
-        role_ids_selected = set(role_map.values())
-        if role_ids_selected != role_ids_required:
-            errors.append("You must assign each role exactly once in your selection.")
-        if form.is_valid() and not errors:
-            StageSelection.objects.filter(team=team, stage=stage).update(validated=False)
-            selection = StageSelection.objects.create(
-                team=team,
-                stage=stage,
-                validated=True,
-            )
-            # Crée les StageSelectionRider
+        action = request.POST.get('action')
+        from .models import DefaultStageSelection, DefaultStageSelectionRider
+        if action == 'set_default':
+            # Save a default selection using the new model
+            rider_ids = request.POST.getlist('riders')
+            role_map = {}
             for rider_id in rider_ids:
-                role_id = role_map.get(int(rider_id))
-                StageSelectionRider.objects.create(
-                    stage_selection=selection,
-                    cyclist_id=int(rider_id),
-                    role_id=role_id
+                role_id = request.POST.get(f'role_{rider_id}', '')
+                if role_id:
+                    role_map[int(rider_id)] = int(role_id)
+            if len(rider_ids) == 8 and len(role_map) == len(roles):
+                DefaultStageSelection.objects.filter(team=team).delete()
+                selection = DefaultStageSelection.objects.create(team=team)
+                for rider_id in rider_ids:
+                    role_id = role_map.get(int(rider_id))
+                    DefaultStageSelectionRider.objects.create(
+                        default_selection=selection,
+                        cyclist_id=int(rider_id),
+                        role_id=role_id
+                    )
+                return redirect(f"{request.path}?stage={stage.id}")
+        elif action == 'apply_default':
+            # Apply default selection to this stage
+            default_selection = DefaultStageSelection.objects.filter(team=team).order_by('-created_at').first()
+            if default_selection:
+                StageSelection.objects.filter(team=team, stage=stage).delete()
+                selection = StageSelection.objects.create(
+                    team=team,
+                    stage=stage,
+                    validated=True,
                 )
-            # Gère les bonus sélectionnés via les tags
-            selected_bonuses_str = request.POST.get('selected_bonuses', '')
-            selected_bonus_ids = [int(bid) for bid in selected_bonuses_str.split(',') if bid.strip()]
-            # Limite à un seul bonus sélectionné
-            if len(selected_bonus_ids) > 1:
-                selected_bonus_ids = selected_bonus_ids[:1]
-            # Supprime les bonus existants pour cette sélection (sécurité)
-            StageSelectionBonus.objects.filter(stage_selection=selection).delete()
-            for bonus_id in selected_bonus_ids:
-                StageSelectionBonus.objects.create(stage_selection=selection, bonus_id=bonus_id, count=1)
-            return redirect(f"{request.path}?stage={stage.id}")
-        locked = False
-        now = timezone.localtime()
-        lock_time = timezone.make_aware(datetime.combine(stage.date, dt_time(12, 0)))
-        locked = now >= lock_time
-        bonus_field_names = [field_name for field_name, _ in getattr(form, 'bonus_fields', [])]
-        for err in errors:
-            form.add_error(None, err)
-        # Pour réafficher la sélection et les rôles sélectionnés
-        initial_roles = {}
-        for rider_id in rider_ids:
-            role_id = request.POST.get(f'role_{rider_id}', '')
-            if role_id:
-                initial_roles[int(rider_id)] = int(role_id)
-        # initial_riders pour affichage à droite
-        if len(rider_ids) == 8:
-            initial_riders = list(form.fields['riders'].queryset.filter(id__in=rider_ids))
-        else:
-            initial_riders = []
-        # Après le tri de initial_riders
-        display_riders = initial_riders[:8] + [None] * (8 - len(initial_riders))
+                for sr in default_selection.riders.select_related('cyclist', 'role').all():
+                    StageSelectionRider.objects.create(
+                        stage_selection=selection,
+                        cyclist=sr.cyclist,
+                        role=sr.role
+                    )
+                return redirect(f"{request.path}?stage={stage.id}")
+        elif action == 'apply_default_all':
+            # Apply default selection to all stages not yet set up
+            default_selection = DefaultStageSelection.objects.filter(team=team).order_by('-created_at').first()
+            if default_selection:
+                for s in stages:
+                    exists = StageSelection.objects.filter(team=team, stage=s, validated=True).exists()
+                    if not exists:
+                        selection = StageSelection.objects.create(
+                            team=team,
+                            stage=s,
+                            validated=True,
+                        )
+                        for sr in default_selection.riders.select_related('cyclist', 'role').all():
+                            StageSelectionRider.objects.create(
+                                stage_selection=selection,
+                                cyclist=sr.cyclist,
+                                role=sr.role
+                            )
+                return redirect(f"{request.path}?stage={stage.id}")
+        elif action is None or action == '' or action == 'validate' or action is None:
+            # Normal selection logic (restored)
+            rider_ids = request.POST.getlist('riders')
+            role_map = {}
+            for rider_id in rider_ids:
+                role_id = request.POST.get(f'role_{rider_id}', '')
+                if role_id:
+                    role_map[int(rider_id)] = int(role_id)
+            errors = []
+            if len(rider_ids) != 8:
+                errors.append("You must select exactly 8 riders.")
+            if not role_map:
+                errors.append("You must assign at least one role to a rider.")
+            role_ids_required = set(role.id for role in roles)
+            role_ids_selected = set(role_map.values())
+            if role_ids_selected != role_ids_required:
+                errors.append("You must assign each role exactly once in your selection.")
+            form = StageSelectionForm(request.POST, team=team, stage=stage, competition=league.competition)
+            if form.is_valid() and not errors:
+                StageSelection.objects.filter(team=team, stage=stage).update(validated=False)
+                selection = StageSelection.objects.create(
+                    team=team,
+                    stage=stage,
+                    validated=True,
+                )
+                for rider_id in rider_ids:
+                    role_id = role_map.get(int(rider_id))
+                    StageSelectionRider.objects.create(
+                        stage_selection=selection,
+                        cyclist_id=int(rider_id),
+                        role_id=role_id
+                    )
+                selected_bonuses_str = request.POST.get('selected_bonuses', '')
+                selected_bonus_ids = [int(bid) for bid in selected_bonuses_str.split(',') if bid.strip()]
+                if len(selected_bonus_ids) > 1:
+                    selected_bonus_ids = selected_bonus_ids[:1]
+                StageSelectionBonus.objects.filter(stage_selection=selection).delete()
+                for bonus_id in selected_bonus_ids:
+                    StageSelectionBonus.objects.create(stage_selection=selection, bonus_id=bonus_id, count=1)
+                return redirect(f"{request.path}?stage={stage.id}")
+            # If errors, fall through to fallback render
+        # Fallback: always return a response
+        # Rebuild context as in get
+        # --- Default selection logic with optimized queries ---
+        default_selection = DefaultStageSelection.objects.prefetch_related(
+            Prefetch('riders', queryset=DefaultStageSelectionRider.objects.select_related('cyclist', 'role'))
+        ).filter(team=team).order_by('-created_at').first()
+        default_riders = []
+        default_roles = {}
+        if default_selection:
+            rider_role_order = {}
+            for sr in default_selection.riders.all():
+                default_roles[sr.cyclist.id] = sr.role.id if sr.role else ''
+                rider_role_order[sr.cyclist.id] = sr.role.order if sr.role else 999
+            default_riders = sorted(
+                [sr.cyclist for sr in default_selection.riders.all()],
+                key=lambda rider: rider_role_order.get(rider.id, 999)
+            )
+        # --- Stage selection logic with optimized queries ---
+        selection = None
         initial_riders = []
         initial_roles = {}
+        stage_selection_qs = StageSelection.objects.prefetch_related(
+            Prefetch('selection_riders', queryset=StageSelectionRider.objects.select_related('cyclist', 'role'))
+        ).filter(team=team, stage=stage).order_by('-validated', '-submitted_at')
+        selection = next(iter(stage_selection_qs), None)
+        if selection:
+            rider_role_order = {}
+            for sr in selection.selection_riders.all():
+                initial_roles[sr.cyclist.id] = sr.role.id if sr.role else ''
+                rider_role_order[sr.cyclist.id] = sr.role.order if sr.role else 999
+            initial_riders = sorted(
+                [sr.cyclist for sr in selection.selection_riders.all()],
+                key=lambda rider: rider_role_order.get(rider.id, 999)
+            )
+        form_initial = {'riders': initial_riders}
+        form = StageSelectionForm(initial=form_initial, team=team, stage=stage, competition=league.competition)
+        locked = False
         if stage:
-            selection = StageSelection.objects.filter(team=team, stage=stage, validated=True).order_by('-submitted_at').first()
-            if not selection:
-                selection = StageSelection.objects.filter(team=team, stage=stage).order_by('-submitted_at').first()
-            if selection:
-                # Associer chaque rider à l'ordre de son rôle
-                rider_role_order = {}
-                for sr in selection.selection_riders.all():
-                    initial_roles[sr.cyclist.id] = sr.role.id if sr.role else ''
-                    rider_role_order[sr.cyclist.id] = sr.role.order if sr.role else 999
-                # Trier les riders selon l'ordre du rôle
-                initial_riders = sorted(
-                    [sr.cyclist for sr in selection.selection_riders.all()],
-                    key=lambda rider: rider_role_order.get(rider.id, 999)
-                )
-        form.initial['riders'] = list(form.fields['riders'].queryset.filter(id__in=rider_ids))
+            now = timezone.localtime()
+            lock_time = timezone.make_aware(datetime.combine(stage.date, dt_time(12, 0)))
+            locked = now >= lock_time
+        # --- Bonuses and validated selections optimized ---
         bonuses = list(BonusConfig.objects.filter(competition=league.competition))
         used_bonuses = {bonus.id: [] for bonus in bonuses}
         available_bonuses = {bonus.id: bonus.max_per_player for bonus in bonuses}
-        selections_validated = StageSelection.objects.filter(team=team, validated=True)
+        selections_validated = StageSelection.objects.filter(team=team, validated=True).prefetch_related(
+            Prefetch('stageselectionbonus_set', queryset=StageSelectionBonus.objects.select_related('bonus', 'stage_selection__stage'))
+        )
         for sel in selections_validated:
             for sb in sel.stageselectionbonus_set.all():
                 used_bonuses[sb.bonus.id].append(sel.stage)
@@ -691,32 +765,30 @@ class StageSelectionLeagueView(LoginRequiredMixin, View):
             if available_bonuses[bonus.id] < 0:
                 available_bonuses[bonus.id] = 0
         selected_bonuses_for_stage = []
-        if stage and team:
-            selection = StageSelection.objects.filter(team=team, stage=stage, validated=True).order_by('-submitted_at').first()
-            if not selection:
-                selection = StageSelection.objects.filter(team=team, stage=stage).order_by('-submitted_at').first()
-            if selection:
-                selected_bonuses_for_stage = list(selection.stageselectionbonus_set.all())
+        if selection:
+            selected_bonuses_for_stage = list(selection.stageselectionbonus_set.select_related('bonus').all())
         any_bonus_used = any(used_bonuses[bonus.id] for bonus in bonuses)
         selected_bonus_ids_for_stage = [sb.bonus.id for sb in selected_bonuses_for_stage]
+        display_riders = initial_riders[:8] + [None] * (8 - len(initial_riders))
         return render(request, 'stage_selection_league.html', {
             'league': league,
             'stages': stages,
             'stage': stage,
             'form': form,
             'locked': locked,
-            'bonus_field_names': bonus_field_names,
-            'roles': roles,
-            'initial_roles': initial_roles,
-            'unique_role_ids': unique_role_ids,
-            'initial_riders': initial_riders,
-            'display_riders': display_riders,
             'bonuses': bonuses,
             'used_bonuses': used_bonuses,
             'available_bonuses': available_bonuses,
+            'roles': roles,
+            'initial_roles': initial_roles,
+            'initial_riders': initial_riders,
+            'display_riders': display_riders,
+            'unique_role_ids': unique_role_ids,
             'selected_bonuses_for_stage': selected_bonuses_for_stage,
             'any_bonus_used': any_bonus_used,
             'selected_bonus_ids_for_stage': selected_bonus_ids_for_stage,
+            'default_riders': default_riders,
+            'default_roles': default_roles,
         })
 
 class PelotonView(LoginRequiredMixin, View):

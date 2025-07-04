@@ -87,6 +87,30 @@
       </div>
       <input type="hidden" name="selected_bonuses" id="selected-bonuses" value="{% for id in selected_bonus_ids_for_stage %}{{ id }}{% if not forloop.last %},{% endif %}{% endfor %}" />
       <button type="submit" class="btn btn-primary" style="margin-top:1em;" {% if locked %}disabled{% endif %}>Valider la sélection</button>
+      <hr/>
+      <h4>Sélection par défaut</h4>
+      {% if default_riders %}
+        <div class="alert alert-info">
+          <strong>Sélection par défaut actuelle :</strong>
+          <ul style="list-style:none;padding:0;">
+            {% for rider in default_riders %}
+              <li>
+                {{ rider.name }} ({{ rider.team }})
+                {% for role in roles %}
+                  {% if default_roles and default_roles|dict_get:rider.id == role.id %}
+                    - <span class="badge bg-info">{{ role.label }}</span>
+                  {% endif %}
+                {% endfor %}
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+        <button type="submit" name="action" value="apply_default" class="btn btn-outline-secondary" style="margin-bottom:0.5em;">Appliquer la sélection par défaut à cette étape</button>
+        <button type="submit" name="action" value="apply_default_all" class="btn btn-outline-secondary">Appliquer la sélection par défaut à toutes les étapes non configurées</button>
+      {% else %}
+        <div class="alert alert-warning">Aucune sélection par défaut définie.</div>
+      {% endif %}
+      <button type="submit" name="action" value="set_default" class="btn btn-outline-primary" style="margin-top:1em;">Définir la sélection actuelle comme sélection par défaut</button>
     </div>
     <div class="col-right" style="flex:1;min-width:0;">
       <h3>Ma sélection pour l'étape</h3>

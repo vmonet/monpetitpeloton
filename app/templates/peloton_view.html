@@ -18,11 +18,21 @@
       <ul style="list-style:none;padding:0;">
         {% with selection=selections|dict_get:team.id %}
           {% if selection %}
-            {% for item in selection %}
+            {% for item in selection|dictsort:'role.order' %}
               <li>
                 {{ item.cyclist.name }} <small>({{ item.cyclist.team }})</small>
                 {% if item.role %}
-                  <span class="badge bg-info" style="margin-left:0.5em;">{{ item.role.label }}</span>
+                  {% if item.role.label|lower == 'leader' %}
+                    <span class="badge" style="background:#FFD600;color:#333;margin-left:0.5em;">{{ item.role.label }}</span>
+                  {% elif item.role.label|lower == 'co-leader' or item.role.label|lower == 'coleader' %}
+                    <span class="badge" style="background:#FFF9C4;color:#333;margin-left:0.5em;">{{ item.role.label }}</span>
+                  {% elif item.role.label|lower == 'sprinteur' %}
+                    <span class="badge bg-success" style="margin-left:0.5em;">{{ item.role.label }}</span>
+                  {% elif item.role.label|lower == 'grimpeur' %}
+                    <span class="badge bg-danger" style="margin-left:0.5em;">{{ item.role.label }}</span>
+                  {% else %}
+                    <span class="badge bg-info" style="margin-left:0.5em;">{{ item.role.label }}</span>
+                  {% endif %}
                 {% endif %}
               </li>
             {% endfor %}
