@@ -819,9 +819,15 @@ class PelotonView(LoginRequiredMixin, View):
         for team in teams:
             selection = selections_by_team.get(team.id)
             if selection:
-                selections[team.id] = [
+                # Trier par role.order, None à la fin
+                selection_items = [
                     {'cyclist': sr.cyclist, 'role': sr.role} for sr in selection.selection_riders.all()
                 ]
+                selection_items_sorted = sorted(
+                    selection_items,
+                    key=lambda item: item['role'].order if item['role'] is not None else 999
+                )
+                selections[team.id] = selection_items_sorted
             else:
                 selections[team.id] = []
         return render(request, 'peloton_view.html', {

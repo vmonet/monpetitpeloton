@@ -18,7 +18,7 @@
       <ul style="list-style:none;padding:0;">
         {% with selection=selections|dict_get:team.id %}
           {% if selection %}
-            {% for item in selection|dictsort:'role.order' %}
+            {% for item in selection %}
               <li>
                 {{ item.cyclist.name }} <small>({{ item.cyclist.team }})</small>
                 {% if item.role %}
