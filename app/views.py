@@ -14,6 +14,8 @@ from collections import defaultdict
 from django.utils import timezone
 from .forms import StageSelectionForm
 from datetime import datetime, time as dt_time
+from django.db.models import Count, Sum
+from django.db.models import Prefetch
 
 BUDGET = 500
 
@@ -32,16 +34,17 @@ class TeamCreateView(View):
         if team:
             league_auction = LeagueAuction.get_latest_for_team_and_round(league, team, current_round)
         # Cyclistes déjà attribués à une équipe (TeamCyclist)
-        team_cyclist_objs = TeamCyclist.objects.filter(league=league)
+        team_cyclist_objs = TeamCyclist.objects.filter(league=league).select_related('cyclist', 'team', 'team__player')
         locked_cyclists = {}
-        for tc in team_cyclist_objs.select_related('cyclist', 'team'):
+        for tc in team_cyclist_objs:
             locked_cyclists[tc.cyclist.id] = {'locked': True, 'assigned_to': tc.team.player.username}
         # Tous les cyclistes (pour affichage à gauche)
         cyclists = Cyclist.objects.all()
         # Sélection du round en cours (TeamCyclistAuction du LeagueAuction courant)
         selected_cyclists = []
         if league_auction:
-            teamcyclists = TeamCyclistAuction.objects.select_related('cyclist').filter(league_auction=league_auction)
+            teamcyclists = list(TeamCyclistAuction.objects.select_related('cyclist').filter(league_auction=league_auction))
+            cyclist_map = {tc.cyclist.id: tc.cyclist for tc in teamcyclists}
             selected_cyclists = [
                 {
                     'id': tc.cyclist.id,
@@ -57,7 +60,7 @@ class TeamCreateView(View):
         team_cyclists = []
         teamcyclist_total = 0
         if team:
-            team_cyclists_qs = TeamCyclist.objects.filter(team=team, league=league).select_related('cyclist')
+            team_cyclists_qs = list(TeamCyclist.objects.filter(team=team, league=league).select_related('cyclist'))
             team_cyclists = [
                 {
                     'id': tc.cyclist.id,
@@ -71,8 +74,6 @@ class TeamCreateView(View):
             teamcyclist_total = sum(tc.price for tc in team_cyclists_qs)
         remaining_budget = BUDGET - teamcyclist_total
         editing_allowed = league.is_active
-        # if league_auction and any(tc['status'] == 'won' for tc in selected_cyclists):
-        #     editing_allowed = False
         return render(request, 'team_create.html', {
             'cyclists': cyclists,
             'budget': BUDGET,
@@ -90,8 +91,9 @@ class TeamCreateView(View):
         user = request.user
         team = Team.objects.filter(player=user, league=league).first()
         teamcyclist_total = 0
+        team_cyclists_qs = []
         if team:
-            team_cyclists_qs = TeamCyclist.objects.filter(team=team, league=league).select_related('cyclist')
+            team_cyclists_qs = list(TeamCyclist.objects.filter(team=team, league=league).select_related('cyclist'))
             teamcyclist_total = sum(tc.price for tc in team_cyclists_qs)
         remaining_budget = BUDGET - teamcyclist_total
         # Déterminer le round courant dynamiquement
@@ -102,18 +104,19 @@ class TeamCreateView(View):
         except Exception:
             return JsonResponse({'error': 'Invalid data.'}, status=400)
         # Nouvelle règle : joueurs déjà dans l'équipe + sélection >= 12
-        total_cyclists = teamcyclist_total and team_cyclists_qs.count() or 0
+        total_cyclists = len(team_cyclists_qs)
         if total_cyclists + len(selected) < 12:
             return JsonResponse({'error': 'You must have at least 12 cyclists in total (current team + selection).'}, status=400)
         cyclist_ids = [c['id'] for c in selected]
         if len(set(cyclist_ids)) != len(cyclist_ids):
             return JsonResponse({'error': 'Duplicate cyclists.'}, status=400)
-        cyclists = Cyclist.objects.filter(id__in=cyclist_ids)
-        if cyclists.count() != len(selected):
+        cyclists = list(Cyclist.objects.filter(id__in=cyclist_ids))
+        cyclist_map = {cy.id: cy for cy in cyclists}
+        if len(cyclists) != len(selected):
             return JsonResponse({'error': 'Invalid cyclist(s).'}, status=400)
         total = 0
         for c in selected:
-            cyclist = next((cy for cy in cyclists if cy.id == c['id']), None)
+            cyclist = cyclist_map.get(c['id'])
             if not cyclist:
                 return JsonResponse({'error': 'Cyclist not found.'}, status=400)
             price = float(c['price'])
@@ -127,9 +130,17 @@ class TeamCreateView(View):
             team = Team.objects.create(player=user, league=league)
         league_auction = LeagueAuction.objects.create(league=league, team=team, round_number=current_round)
         # Créer les TeamCyclistAuction associés
-        for c in selected:
-            cyclist = next((cy for cy in cyclists if cy.id == c['id']), None)
-            TeamCyclistAuction.objects.create(league_auction=league_auction, cyclist=cyclist, price=float(c['price']), status='pending')
+        cyclist_map = {cy.id: cy for cy in cyclists}
+        tca_objs = [
+            TeamCyclistAuction(
+                league_auction=league_auction,
+                cyclist=cyclist_map[c['id']],
+                price=float(c['price']),
+                status='pending'
+            )
+            for c in selected
+        ]
+        TeamCyclistAuction.objects.bulk_create(tca_objs)
         league_auction.check_and_resolve_auction()
         return JsonResponse({'success': True})
 
@@ -142,20 +153,32 @@ class LeagueTeamStatusView(View):
             return HttpResponseForbidden("You are not a member of this league.")
         # Déterminer le round courant dynamiquement
         current_round = LeagueRound.objects.filter(league=league).order_by('-round_number').first().round_number
-        # Get all teams (members)
-        teams = Team.objects.filter(league=league).select_related('player')
+        # Get all teams (members) and prefetch cyclists
+        teams = Team.objects.filter(league=league).select_related('player').prefetch_related('team_cyclists')
+        # Prefetch all TeamCyclists for these teams in this league
+        teamcyclists = TeamCyclist.objects.filter(league=league)
+        teamcyclists_by_team = {}
+        for tc in teamcyclists:
+            teamcyclists_by_team.setdefault(tc.team_id, []).append(tc)
+        # Batch fetch latest auctions for all teams
+        auctions = {team.id: LeagueAuction.get_latest_for_team_and_round(league, team, current_round) for team in teams}
+        # Batch fetch all TeamCyclistAuctions for these auctions
+        auction_ids = [a.id for a in auctions.values() if a]
+        auction_cyclist_counts = {}
+        if auction_ids:
+            from django.db.models import Count as DJCount
+            counts = TeamCyclistAuction.objects.filter(league_auction_id__in=auction_ids).values('league_auction_id').annotate(count=DJCount('id'))
+            auction_cyclist_counts = {c['league_auction_id']: c['count'] for c in counts}
         status_list = []
         for team in teams:
             user = team.player
-            league_auction = LeagueAuction.get_latest_for_team_and_round(league, team, current_round)
-            team_cyclist_count = TeamCyclist.objects.filter(team=team).count()
-            remaining_budget = BUDGET
-            if team_cyclist_count > 0:
-                team_cyclists_qs = TeamCyclist.objects.filter(team=team, league=league)
-                teamcyclist_total = sum(tc.price for tc in team_cyclists_qs)
-                remaining_budget = BUDGET - teamcyclist_total
+            league_auction = auctions.get(team.id)
+            team_cyclists = teamcyclists_by_team.get(team.id, [])
+            team_cyclist_count = len(team_cyclists)
+            teamcyclist_total = sum(tc.price for tc in team_cyclists)
+            remaining_budget = BUDGET - teamcyclist_total
             if league_auction:
-                cyclist_count = TeamCyclistAuction.objects.filter(league_auction=league_auction).count()
+                cyclist_count = auction_cyclist_counts.get(league_auction.id, 0)
                 submitted = cyclist_count > 0
             else:
                 cyclist_count = 0
@@ -705,12 +728,23 @@ class PelotonView(LoginRequiredMixin, View):
         stage_id = request.GET.get('stage')
         stage = get_object_or_404(Stage, id=stage_id) if stage_id else stages.first()
         teams = Team.objects.filter(league=league).select_related('player')
-        # Retourne la liste des cyclistes sélectionnés et leur rôle pour chaque team à cette étape
+        team_ids = [team.id for team in teams]
+        # Batch fetch all StageSelections for these teams and this stage, prefetch selection_riders, cyclist, and role
+        selection_qs = StageSelection.objects.filter(team_id__in=team_ids, stage=stage).order_by('-submitted_at')
+        selection_qs = selection_qs.prefetch_related(
+            Prefetch('selection_riders', queryset=StageSelectionRider.objects.select_related('cyclist', 'role'))
+        )
+        # For each team, get the latest validated selection, or latest unvalidated if none
+        selections_by_team = {}
+        for sel in selection_qs:
+            if sel.validated:
+                if sel.team_id not in selections_by_team:
+                    selections_by_team[sel.team_id] = sel
+            elif sel.team_id not in selections_by_team:
+                selections_by_team[sel.team_id] = sel
         selections = {}
         for team in teams:
-            selection = StageSelection.objects.filter(team=team, stage=stage, validated=True).order_by('-submitted_at').first()
-            if not selection:
-                selection = StageSelection.objects.filter(team=team, stage=stage).order_by('-submitted_at').first()
+            selection = selections_by_team.get(team.id)
             if selection:
                 selections[team.id] = [
                     {'cyclist': sr.cyclist, 'role': sr.role} for sr in selection.selection_riders.all()
