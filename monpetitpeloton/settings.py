@@ -52,7 +52,11 @@ INSTALLED_APPS = [
     'allauth.account',
     'allauth.socialaccount',
     'widget_tweaks',
+    # Debug Toolbar (only in DEBUG)
 ]
+
+if DEBUG:
+    INSTALLED_APPS += ['debug_toolbar']
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -65,6 +69,13 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+if DEBUG:
+    MIDDLEWARE = ['debug_toolbar.middleware.DebugToolbarMiddleware'] + MIDDLEWARE
+
+# Debug Toolbar config
+if DEBUG:
+    INTERNAL_IPS = ['127.0.0.1']
 
 ROOT_URLCONF = 'monpetitpeloton.urls'
 
@@ -163,3 +174,15 @@ EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 # Ajouter la nouvelle configuration recommandée
 ACCOUNT_LOGIN_METHODS = {'email'}
 ACCOUNT_SIGNUP_FIELDS = ['email*', 'username*', 'password1*', 'password2*']
+
+if DEBUG:
+    import debug_toolbar
+    from django.urls import include, path
+    # Patch the URL patterns to include debug_toolbar
+    def patch_debug_toolbar(urlpatterns):
+        return [path('__debug__/', include(debug_toolbar.urls))] + urlpatterns
+else:
+    def patch_debug_toolbar(urlpatterns):
+        return urlpatterns
+
+# At the end of the file, add a note for the user to patch their urls.py
