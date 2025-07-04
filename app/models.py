@@ -8,6 +8,7 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 import random
 import string
+import uuid
 
 User = get_user_model()
 
@@ -384,3 +385,23 @@ class DefaultStageSelectionRider(models.Model):
 
     def __str__(self):
         return f"{self.cyclist} as {self.role} in {self.default_selection}"
+
+class Resultat(models.Model):
+    stage = models.ForeignKey('Stage', on_delete=models.CASCADE, related_name='resultats')
+    insert_batch_id = models.UUIDField(default=uuid.uuid4, editable=False)
+    rnk = models.CharField(max_length=10, blank=True, null=True)
+    gc = models.CharField(max_length=10, blank=True, null=True)
+    timelag = models.CharField(max_length=20, blank=True, null=True)
+    bib = models.CharField(max_length=10, blank=True, null=True)
+    h2h = models.CharField(max_length=10, blank=True, null=True)
+    specialty = models.CharField(max_length=50, blank=True, null=True)
+    rider = models.CharField(max_length=255, blank=True, null=True)
+    age = models.CharField(max_length=10, blank=True, null=True)
+    team = models.CharField(max_length=255, blank=True, null=True)
+    uci = models.CharField(max_length=20, blank=True, null=True)
+    pnt = models.CharField(max_length=10, blank=True, null=True)
+    time = models.CharField(max_length=20, blank=True, null=True)
+    insert_date = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.rider} ({self.team}) - {self.insert_batch_id}"
