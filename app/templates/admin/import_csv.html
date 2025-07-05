@@ -1,0 +1,53 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+  <h1>{% if import_type == 'html' %}Importer un HTML de résultats{% else %}Importer un CSV de résultats{% endif %}</h1>
+  <form method="post" enctype="multipart/form-data" id="import-form">
+    {% csrf_token %}
+    <div>
+      {{ form.competition.label_tag }} {{ form.competition }}
+    </div>
+    <div>
+      {{ form.stage.label_tag }}
+      <select name="stage" id="id_stage" data-initial-stage="{{ form.stage.value|escapejs }}">
+        <option value=''>---------</option>
+      </select>
+    </div>
+    <div>
+      {% if import_type == 'html' %}
+        {{ form.html_file.label_tag }} {{ form.html_file }}
+      {% else %}
+        {{ form.csv_file.label_tag }} {{ form.csv_file }}
+      {% endif %}
+    </div>
+    <button type="submit" class="default">Importer</button>
+    <a href=".." class="button">Annuler</a>
+  </form>
+  <script>
+    const allStages = {{ all_stages|safe }};
+    document.addEventListener('DOMContentLoaded', function() {
+      const competitionField = document.getElementById('id_competition');
+      const stageField = document.getElementById('id_stage');
+      function updateStages() {
+        const compId = competitionField.value;
+        const initialStageId = stageField.getAttribute('data-initial-stage');
+        stageField.innerHTML = "<option value=''>---------</option>";
+        allStages.filter(function(s) { return String(s.competition_id) === compId; }).forEach(function(stage) {
+          const option = document.createElement('option');
+          option.value = stage.id;
+          option.textContent = stage.name;
+          stageField.appendChild(option);
+        });
+        if (initialStageId) {
+          stageField.value = initialStageId;
+        }
+      }
+      competitionField.addEventListener('change', function() {
+        stageField.setAttribute('data-initial-stage', '');
+        updateStages();
+      });
+      if (competitionField.value) {
+        updateStages();
+      }
+    });
+  </script>
+{% endblock %} 

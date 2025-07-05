@@ -1,7 +1,7 @@
 from django.urls import path
 
 from . import views
-from .views import TeamCreateView, LeagueTeamStatusView, AdminTeamEditView, LeagueTeamsListView, LeagueCreateView, LeagueJoinView, LeagueActivateView, HomepageView, StageSelectionView, CompetitionStagesView, StageSelectionLeagueView, PelotonView
+from .views import TeamCreateView, LeagueTeamStatusView, AdminTeamEditView, LeagueTeamsListView, LeagueCreateView, LeagueJoinView, LeagueActivateView, HomepageView, StageSelectionView, CompetitionStagesView, StageSelectionLeagueView, PelotonView, LeagueResultsView
 
 urlpatterns = [
     path("", HomepageView.as_view(), name="homepage"),
@@ -13,6 +13,7 @@ urlpatterns = [
     path("league/join/", LeagueJoinView.as_view(), name="league_join"),
     path("league/<int:league_id>/activate/", LeagueActivateView.as_view(), name="league_activate"),
     path("league/<int:league_id>/auction/results/", views.LeagueAuctionResultsView.as_view(), name="auction_results"),
+    path("league/<int:league_id>/results/", LeagueResultsView.as_view(), name="league_results"),
     path("competition/<int:competition_id>/stages/", CompetitionStagesView.as_view(), name="competition_stages"),
     path("stage/<int:stage_id>/select/", StageSelectionView.as_view(), name="stage_selection"),
     path("league/<int:league_id>/stage-selection/", StageSelectionLeagueView.as_view(), name="stage_selection_league"),
