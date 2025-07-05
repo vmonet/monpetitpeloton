@@ -205,11 +205,11 @@ def parse_html_results(html_content, stage, insert_batch_id):
     res_tabs = soup.find_all('div', class_='resTab')
     
     for res_tab in res_tabs:
-        data_id = res_tab.get('data-id')
+        # Détermine le type de classement selon la structure et le contenu
+        table_type = determine_res_tab_type(res_tab)
         
-        # Détermine le type de classement selon data-id
-        if data_id == '282552':
-            # Stage General
+        if table_type == 'stage_general':
+            # Stage General - première table avec GC, timelag, etc.
             general_div = res_tab.find('div', class_='general')
             if general_div:
                 table = general_div.find('table')
@@ -218,8 +218,8 @@ def parse_html_results(html_content, stage, insert_batch_id):
                     headers = [th.get('data-code') for th in table.find('thead').find_all('th')]
                     counts['stage_general'] = insert_stage_general_results(rows, headers, stage, insert_batch_id)
         
-        elif data_id == '303507':
-            # General Time
+        elif table_type == 'general_time':
+            # General Time - table avec time_wonlost
             general_div = res_tab.find('div', class_='general')
             if general_div:
                 table = general_div.find('table')
@@ -228,7 +228,7 @@ def parse_html_results(html_content, stage, insert_batch_id):
                     headers = [th.get('data-code') for th in table.find('thead').find_all('th')]
                     counts['general_time'] = insert_general_time_results(rows, headers, stage, insert_batch_id)
         
-        elif data_id == '303508':
+        elif table_type == 'points':
             # Points (General + Today)
             general_div = res_tab.find('div', class_='general')
             if general_div:
@@ -246,7 +246,7 @@ def parse_html_results(html_content, stage, insert_batch_id):
                     headers = [th.get('data-code') for th in table.find('thead').find_all('th')]
                     counts['points_today'] = insert_points_today_results(rows, headers, stage, insert_batch_id)
         
-        elif data_id == '303510':
+        elif table_type == 'kom':
             # KOM/Sprints (General + Today)
             general_div = res_tab.find('div', class_='general')
             if general_div:
@@ -267,7 +267,7 @@ def parse_html_results(html_content, stage, insert_batch_id):
                     headers = [th.get('data-code') for th in table.find('thead').find_all('th')]
                     counts['kom_today'] += insert_kom_today_results(rows, headers, stage, insert_batch_id, kom_type)
         
-        elif data_id == '303509':
+        elif table_type == 'youth':
             # Youth (General + Today)
             general_div = res_tab.find('div', class_='general')
             if general_div:
@@ -285,7 +285,7 @@ def parse_html_results(html_content, stage, insert_batch_id):
                     headers = [th.get('data-code') for th in table.find('thead').find_all('th')]
                     counts['youth_today'] = insert_youth_today_results(rows, headers, stage, insert_batch_id)
         
-        elif data_id == '303511':
+        elif table_type == 'team':
             # Team (General + Today)
             general_div = res_tab.find('div', class_='general')
             if general_div:
@@ -305,38 +305,74 @@ def parse_html_results(html_content, stage, insert_batch_id):
     
     return counts
 
-def determine_table_type(title, index):
+def determine_res_tab_type(res_tab):
     """
-    Détermine le type de table selon le titre ou l'ordre d'apparition.
+    Détermine le type de classement d'une resTab en analysant sa structure et son contenu.
     """
-    title_lower = title.lower()
-    
-    if 'points at finish' in title_lower or 'bonis' in title_lower:
-        return 'finish_points'
-    elif 'kom' in title_lower or 'sprint' in title_lower or 'col' in title_lower or 'côte' in title_lower:
-        return 'kom'
-    elif 'youth' in title_lower or 'jeunes' in title_lower:
-        return 'youth'
-    elif 'points' in title_lower and 'general' not in title_lower:
-        return 'points'
-    elif 'time' in title_lower and 'general' in title_lower:
-        return 'general_time'
-    else:
-        # Par défaut selon l'ordre d'apparition
-        if index == 0:
-            return 'general'
-        elif index == 1:
+    # Cherche les boutons de navigation pour identifier le type
+    button_nav = res_tab.find('ul', class_='buttonNav')
+    if button_nav:
+        buttons = button_nav.find_all('a')
+        button_texts = [btn.get_text(strip=True).lower() for btn in buttons]
+        
+        # Points classification
+        if 'general' in button_texts and 'today' in button_texts:
+            # Vérifie si c'est KOM en cherchant des h4 avec "KOM" ou "Sprint"
+            today_div = res_tab.find('div', class_='today')
+            if today_div:
+                h4_elements = today_div.find_all('h4')
+                for h4 in h4_elements:
+                    h4_text = h4.get_text().lower()
+                    if 'kom' in h4_text or 'sprint' in h4_text:
+                        return 'kom'
+            
+            # Vérifie si c'est Youth en cherchant "youth" dans le contenu
+            if any('youth' in text for text in button_texts):
+                return 'youth'
+            
+            # Vérifie si c'est Team en analysant la structure de la table
+            general_div = res_tab.find('div', class_='general')
+            if general_div:
+                table = general_div.find('table')
+                if table:
+                    headers = [th.get('data-code') for th in table.find('thead').find_all('th')]
+                    # Si pas de colonnes rider/bib, c'est probablement team
+                    if 'ridername' not in headers and 'bib' not in headers:
+                        return 'team'
+            
+            # Par défaut, c'est points
             return 'points'
-        elif index == 2:
-            return 'finish_points'
-        elif index == 3:
-            return 'kom'
-        elif index == 4:
-            return 'general_time'
-        elif index == 5:
-            return 'youth'
-        else:
-            return 'general'
+    
+    # Si pas de boutons, analyse la structure de la première table
+    general_div = res_tab.find('div', class_='general')
+    if general_div:
+        table = general_div.find('table')
+        if table:
+            headers = [th.get('data-code') for th in table.find('thead').find_all('th')]
+            
+            # Stage General - a gc, gc_timelag, uci_pnt, bonis
+            if 'gc' in headers and 'gc_timelag' in headers and 'uci_pnt' in headers:
+                return 'stage_general'
+            
+            # General Time - a time_wonlost
+            if 'time_wonlost' in headers:
+                return 'general_time'
+            
+            # Team - pas de ridername/bib
+            if 'ridername' not in headers and 'bib' not in headers:
+                return 'team'
+            
+            # Youth - vérifie le contenu pour "youth"
+            youth_div = res_tab.find('div', class_='today')
+            if youth_div:
+                h4_elements = youth_div.find_all('h4')
+                for h4 in h4_elements:
+                    h4_text = h4.get_text().lower()
+                    if 'youth' in h4_text:
+                        return 'youth'
+    
+    # Par défaut, on considère que c'est stage_general
+    return 'stage_general'
 
 def safe_int(value):
     """Convertit une valeur en entier de manière sécurisée."""
