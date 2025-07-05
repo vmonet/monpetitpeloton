@@ -405,3 +405,284 @@ class Resultat(models.Model):
 
     def __str__(self):
         return f"{self.rider} ({self.team}) - {self.insert_batch_id}"
+
+class GeneralResult(models.Model):
+    stage = models.ForeignKey('Stage', on_delete=models.CASCADE, related_name='general_results')
+    insert_batch_id = models.UUIDField(default=uuid.uuid4, editable=False)
+    rnk = models.IntegerField(null=True, blank=True)
+    bib = models.IntegerField(null=True, blank=True)
+    h2h = models.BooleanField(null=True, blank=True)
+    specialty = models.CharField(max_length=50, blank=True, null=True)
+    age = models.IntegerField(null=True, blank=True)
+    rider = models.CharField(max_length=255, blank=True, null=True)
+    team = models.CharField(max_length=255, blank=True, null=True)
+    time = models.CharField(max_length=50, blank=True, null=True)
+    time_wonlost = models.CharField(max_length=50, blank=True, null=True)
+    insert_date = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"GeneralResult {self.rnk} - {self.rider}"
+
+class PointsResult(models.Model):
+    stage = models.ForeignKey('Stage', on_delete=models.CASCADE, related_name='points_results')
+    insert_batch_id = models.UUIDField(default=uuid.uuid4, editable=False)
+    rnk = models.IntegerField(null=True, blank=True)
+    bib = models.IntegerField(null=True, blank=True)
+    h2h = models.BooleanField(null=True, blank=True)
+    specialty = models.CharField(max_length=50, blank=True, null=True)
+    age = models.IntegerField(null=True, blank=True)
+    rider = models.CharField(max_length=255, blank=True, null=True)
+    team = models.CharField(max_length=255, blank=True, null=True)
+    pnt = models.IntegerField(null=True, blank=True)
+    today = models.CharField(max_length=20, blank=True, null=True)
+    insert_date = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"PointsResult {self.rnk} - {self.rider}"
+
+class FinishPointsResult(models.Model):
+    stage = models.ForeignKey('Stage', on_delete=models.CASCADE, related_name='finish_points_results')
+    insert_batch_id = models.UUIDField(default=uuid.uuid4, editable=False)
+    rnk = models.IntegerField(null=True, blank=True)
+    bib = models.IntegerField(null=True, blank=True)
+    h2h = models.BooleanField(null=True, blank=True)
+    specialty = models.CharField(max_length=50, blank=True, null=True)
+    age = models.IntegerField(null=True, blank=True)
+    rider = models.CharField(max_length=255, blank=True, null=True)
+    team = models.CharField(max_length=255, blank=True, null=True)
+    pnt = models.IntegerField(null=True, blank=True)
+    bonis = models.CharField(max_length=20, blank=True, null=True)
+    today = models.CharField(max_length=20, blank=True, null=True)
+    insert_date = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"FinishPointsResult {self.rnk} - {self.rider}"
+
+class KOMResult(models.Model):
+    stage = models.ForeignKey('Stage', on_delete=models.CASCADE, related_name='kom_results')
+    insert_batch_id = models.UUIDField(default=uuid.uuid4, editable=False)
+    rnk = models.IntegerField(null=True, blank=True)
+    bib = models.IntegerField(null=True, blank=True)
+    h2h = models.BooleanField(null=True, blank=True)
+    specialty = models.CharField(max_length=50, blank=True, null=True)
+    age = models.IntegerField(null=True, blank=True)
+    rider = models.CharField(max_length=255, blank=True, null=True)
+    team = models.CharField(max_length=255, blank=True, null=True)
+    pnt = models.IntegerField(null=True, blank=True)
+    today = models.CharField(max_length=20, blank=True, null=True)
+    kom_type = models.CharField(max_length=100, blank=True, null=True)
+    insert_date = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"KOMResult {self.kom_type} {self.rnk} - {self.rider}"
+
+class GeneralTimeResult(models.Model):
+    stage = models.ForeignKey('Stage', on_delete=models.CASCADE, related_name='general_time_results')
+    insert_batch_id = models.UUIDField(default=uuid.uuid4, editable=False)
+    rnk = models.IntegerField(null=True, blank=True)
+    bib = models.IntegerField(null=True, blank=True)
+    h2h = models.BooleanField(null=True, blank=True)
+    specialty = models.CharField(max_length=50, blank=True, null=True)
+    age = models.IntegerField(null=True, blank=True)
+    rider = models.CharField(max_length=255, blank=True, null=True)
+    team = models.CharField(max_length=255, blank=True, null=True)
+    time = models.CharField(max_length=50, blank=True, null=True)
+    time_wonlost = models.CharField(max_length=50, blank=True, null=True)
+    insert_date = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"GeneralTimeResult {self.rnk} - {self.rider}"
+
+class YouthResult(models.Model):
+    stage = models.ForeignKey('Stage', on_delete=models.CASCADE, related_name='youth_results')
+    insert_batch_id = models.UUIDField(default=uuid.uuid4, editable=False)
+    rnk = models.IntegerField(null=True, blank=True)
+    bib = models.IntegerField(null=True, blank=True)
+    h2h = models.BooleanField(null=True, blank=True)
+    specialty = models.CharField(max_length=50, blank=True, null=True)
+    age = models.IntegerField(null=True, blank=True)
+    rider = models.CharField(max_length=255, blank=True, null=True)
+    team = models.CharField(max_length=255, blank=True, null=True)
+    time = models.CharField(max_length=50, blank=True, null=True)
+    time_wonlost = models.CharField(max_length=50, blank=True, null=True)
+    insert_date = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"YouthResult {self.rnk} - {self.rider}"
+
+class StageGeneralResult(models.Model):
+    """Classement général de l'étape (data-id=282552)"""
+    stage = models.ForeignKey('Stage', on_delete=models.CASCADE, related_name='stage_general_results')
+    insert_batch_id = models.UUIDField(default=uuid.uuid4, editable=False)
+    rnk = models.IntegerField(null=True, blank=True)
+    gc = models.CharField(max_length=10, blank=True, null=True)
+    timelag = models.CharField(max_length=20, blank=True, null=True)
+    bib = models.IntegerField(null=True, blank=True)
+    h2h = models.BooleanField(null=True, blank=True)
+    specialty = models.CharField(max_length=50, blank=True, null=True)
+    age = models.IntegerField(null=True, blank=True)
+    rider = models.CharField(max_length=255, blank=True, null=True)
+    team = models.CharField(max_length=255, blank=True, null=True)
+    uci = models.CharField(max_length=20, blank=True, null=True)
+    pnt = models.CharField(max_length=10, blank=True, null=True)
+    bonis = models.CharField(max_length=20, blank=True, null=True)
+    time = models.CharField(max_length=50, blank=True, null=True)
+    insert_date = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Stage General - {self.rider} ({self.stage.name})"
+
+class GeneralTimeResult(models.Model):
+    """Classement général au temps (data-id=303507)"""
+    stage = models.ForeignKey('Stage', on_delete=models.CASCADE, related_name='general_time_results')
+    insert_batch_id = models.UUIDField(default=uuid.uuid4, editable=False)
+    rnk = models.IntegerField(null=True, blank=True)
+    bib = models.IntegerField(null=True, blank=True)
+    h2h = models.BooleanField(null=True, blank=True)
+    specialty = models.CharField(max_length=50, blank=True, null=True)
+    age = models.IntegerField(null=True, blank=True)
+    rider = models.CharField(max_length=255, blank=True, null=True)
+    team = models.CharField(max_length=255, blank=True, null=True)
+    uci = models.CharField(max_length=20, blank=True, null=True)
+    bonis = models.CharField(max_length=20, blank=True, null=True)
+    time = models.CharField(max_length=50, blank=True, null=True)
+    time_wonlost = models.CharField(max_length=50, blank=True, null=True)
+    insert_date = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"General Time - {self.rider} ({self.stage.name})"
+
+class PointsGeneralResult(models.Model):
+    """Classement par points - General (data-id=303508)"""
+    stage = models.ForeignKey('Stage', on_delete=models.CASCADE, related_name='points_general_results')
+    insert_batch_id = models.UUIDField(default=uuid.uuid4, editable=False)
+    rnk = models.IntegerField(null=True, blank=True)
+    bib = models.IntegerField(null=True, blank=True)
+    h2h = models.BooleanField(null=True, blank=True)
+    specialty = models.CharField(max_length=50, blank=True, null=True)
+    age = models.IntegerField(null=True, blank=True)
+    rider = models.CharField(max_length=255, blank=True, null=True)
+    team = models.CharField(max_length=255, blank=True, null=True)
+    pnt = models.IntegerField(null=True, blank=True)
+    today = models.CharField(max_length=20, blank=True, null=True)
+    insert_date = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Points General - {self.rider} ({self.stage.name})"
+
+class PointsTodayResult(models.Model):
+    """Classement par points - Today (data-id=303508)"""
+    stage = models.ForeignKey('Stage', on_delete=models.CASCADE, related_name='points_today_results')
+    insert_batch_id = models.UUIDField(default=uuid.uuid4, editable=False)
+    rnk = models.IntegerField(null=True, blank=True)
+    bib = models.IntegerField(null=True, blank=True)
+    h2h = models.BooleanField(null=True, blank=True)
+    specialty = models.CharField(max_length=50, blank=True, null=True)
+    age = models.IntegerField(null=True, blank=True)
+    rider = models.CharField(max_length=255, blank=True, null=True)
+    team = models.CharField(max_length=255, blank=True, null=True)
+    pnt = models.IntegerField(null=True, blank=True)
+    today = models.CharField(max_length=20, blank=True, null=True)
+    insert_date = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Points Today - {self.rider} ({self.stage.name})"
+
+class KOMGeneralResult(models.Model):
+    """Classement KOM/Sprints - General (data-id=303510)"""
+    stage = models.ForeignKey('Stage', on_delete=models.CASCADE, related_name='kom_general_results')
+    insert_batch_id = models.UUIDField(default=uuid.uuid4, editable=False)
+    rnk = models.IntegerField(null=True, blank=True)
+    bib = models.IntegerField(null=True, blank=True)
+    h2h = models.BooleanField(null=True, blank=True)
+    specialty = models.CharField(max_length=50, blank=True, null=True)
+    age = models.IntegerField(null=True, blank=True)
+    rider = models.CharField(max_length=255, blank=True, null=True)
+    team = models.CharField(max_length=255, blank=True, null=True)
+    pnt = models.IntegerField(null=True, blank=True)
+    today = models.CharField(max_length=20, blank=True, null=True)
+    insert_date = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"KOM General - {self.rider} ({self.stage.name})"
+
+class KOMTodayResult(models.Model):
+    """Classement KOM/Sprints - Today (data-id=303510)"""
+    stage = models.ForeignKey('Stage', on_delete=models.CASCADE, related_name='kom_today_results')
+    insert_batch_id = models.UUIDField(default=uuid.uuid4, editable=False)
+    rnk = models.IntegerField(null=True, blank=True)
+    bib = models.IntegerField(null=True, blank=True)
+    h2h = models.BooleanField(null=True, blank=True)
+    specialty = models.CharField(max_length=50, blank=True, null=True)
+    age = models.IntegerField(null=True, blank=True)
+    rider = models.CharField(max_length=255, blank=True, null=True)
+    team = models.CharField(max_length=255, blank=True, null=True)
+    pnt = models.IntegerField(null=True, blank=True)
+    today = models.CharField(max_length=20, blank=True, null=True)
+    kom_type = models.CharField(max_length=100, blank=True, null=True)
+    insert_date = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"KOM Today - {self.rider} ({self.stage.name})"
+
+class YouthGeneralResult(models.Model):
+    """Classement jeunes - General (data-id=303509)"""
+    stage = models.ForeignKey('Stage', on_delete=models.CASCADE, related_name='youth_general_results')
+    insert_batch_id = models.UUIDField(default=uuid.uuid4, editable=False)
+    rnk = models.IntegerField(null=True, blank=True)
+    bib = models.IntegerField(null=True, blank=True)
+    h2h = models.BooleanField(null=True, blank=True)
+    specialty = models.CharField(max_length=50, blank=True, null=True)
+    age = models.IntegerField(null=True, blank=True)
+    rider = models.CharField(max_length=255, blank=True, null=True)
+    team = models.CharField(max_length=255, blank=True, null=True)
+    time = models.CharField(max_length=50, blank=True, null=True)
+    time_wonlost = models.CharField(max_length=50, blank=True, null=True)
+    insert_date = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Youth General - {self.rider} ({self.stage.name})"
+
+class YouthTodayResult(models.Model):
+    """Classement jeunes - Today (data-id=303509)"""
+    stage = models.ForeignKey('Stage', on_delete=models.CASCADE, related_name='youth_today_results')
+    insert_batch_id = models.UUIDField(default=uuid.uuid4, editable=False)
+    rnk = models.IntegerField(null=True, blank=True)
+    bib = models.IntegerField(null=True, blank=True)
+    h2h = models.BooleanField(null=True, blank=True)
+    specialty = models.CharField(max_length=50, blank=True, null=True)
+    age = models.IntegerField(null=True, blank=True)
+    rider = models.CharField(max_length=255, blank=True, null=True)
+    team = models.CharField(max_length=255, blank=True, null=True)
+    time = models.CharField(max_length=50, blank=True, null=True)
+    time_wonlost = models.CharField(max_length=50, blank=True, null=True)
+    insert_date = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Youth Today - {self.rider} ({self.stage.name})"
+
+class TeamGeneralResult(models.Model):
+    """Classement par équipes - General (data-id=303511)"""
+    stage = models.ForeignKey('Stage', on_delete=models.CASCADE, related_name='team_general_results')
+    insert_batch_id = models.UUIDField(default=uuid.uuid4, editable=False)
+    rnk = models.IntegerField(null=True, blank=True)
+    team = models.CharField(max_length=255, blank=True, null=True)
+    time = models.CharField(max_length=50, blank=True, null=True)
+    time_wonlost = models.CharField(max_length=50, blank=True, null=True)
+    insert_date = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Team General - {self.team} ({self.stage.name})"
+
+class TeamTodayResult(models.Model):
+    """Classement par équipes - Today (data-id=303511)"""
+    stage = models.ForeignKey('Stage', on_delete=models.CASCADE, related_name='team_today_results')
+    insert_batch_id = models.UUIDField(default=uuid.uuid4, editable=False)
+    rnk = models.IntegerField(null=True, blank=True)
+    team = models.CharField(max_length=255, blank=True, null=True)
+    time = models.CharField(max_length=50, blank=True, null=True)
+    time_wonlost = models.CharField(max_length=50, blank=True, null=True)
+    insert_date = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Team Today - {self.team} ({self.stage.name})"

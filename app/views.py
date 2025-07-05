@@ -4,7 +4,7 @@ from django.views import View
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.utils.decorators import method_decorator
-from .models import Cyclist, Team, League, TeamCyclistAuction, User, Competition, LeagueAuction, TeamCyclist, LeagueRound, Stage, StageSelection, StageSelectionBonus, BonusConfig, Role, StageSelectionRider, DefaultStageSelection, DefaultStageSelectionRider
+from .models import Cyclist, Team, League, TeamCyclistAuction, User, Competition, LeagueAuction, TeamCyclist, LeagueRound, Stage, StageSelection, StageSelectionBonus, BonusConfig, Role, StageSelectionRider, DefaultStageSelection, DefaultStageSelectionRider, StageGeneralResult, GeneralTimeResult, PointsGeneralResult, PointsTodayResult, KOMGeneralResult, KOMTodayResult, YouthGeneralResult, YouthTodayResult, TeamGeneralResult, TeamTodayResult
 from django.views.decorators.csrf import csrf_exempt
 import json
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -844,4 +844,65 @@ class PelotonView(LoginRequiredMixin, View):
             'teams': teams,
             'selections': selections,
             'auction_finished': league.auction_finished,
+        })
+
+@method_decorator(login_required, name='dispatch')
+class LeagueResultsView(View):
+    """
+    Vue pour afficher les résultats d'une compétition avec sélecteur d'étape et onglets.
+    """
+    def get(self, request, league_id):
+        league = get_object_or_404(League, id=league_id)
+        
+        # Vérifier que l'utilisateur est membre de la ligue
+        if not Team.objects.filter(player=request.user, league=league).exists():
+            return HttpResponseForbidden("Vous n'êtes pas membre de cette ligue.")
+        
+        competition = league.competition
+        stages = Stage.objects.filter(competition=competition).order_by('date')
+        
+        # Récupérer l'étape sélectionnée (par défaut la première)
+        selected_stage_id = request.GET.get('stage')
+        if selected_stage_id:
+            selected_stage = get_object_or_404(Stage, id=selected_stage_id, competition=competition)
+        else:
+            selected_stage = stages.first()
+        
+        # Récupérer les résultats pour l'étape sélectionnée
+        results = {}
+        if selected_stage:
+            results = {
+                'stage_general': StageGeneralResult.objects.filter(stage=selected_stage).order_by('rnk'),
+                'general_time': GeneralTimeResult.objects.filter(stage=selected_stage).order_by('rnk'),
+                'points_general': PointsGeneralResult.objects.filter(stage=selected_stage).order_by('rnk'),
+                'points_today': PointsTodayResult.objects.filter(stage=selected_stage).order_by('rnk'),
+                'kom_general': KOMGeneralResult.objects.filter(stage=selected_stage).order_by('rnk'),
+                'kom_today': KOMTodayResult.objects.filter(stage=selected_stage).order_by('rnk'),
+                'youth_general': YouthGeneralResult.objects.filter(stage=selected_stage).order_by('rnk'),
+                'youth_today': YouthTodayResult.objects.filter(stage=selected_stage).order_by('rnk'),
+                'team_general': TeamGeneralResult.objects.filter(stage=selected_stage).order_by('rnk'),
+                'team_today': TeamTodayResult.objects.filter(stage=selected_stage).order_by('rnk'),
+            }
+        
+        # Définir les labels des onglets
+        tab_labels = {
+            'stage_general': 'Classement Général',
+            'general_time': 'Classement Temps',
+            'points_general': 'Points - Général',
+            'points_today': 'Points - Aujourd\'hui',
+            'kom_general': 'KOM - Général',
+            'kom_today': 'KOM - Aujourd\'hui',
+            'youth_general': 'Jeunes - Général',
+            'youth_today': 'Jeunes - Aujourd\'hui',
+            'team_general': 'Équipes - Général',
+            'team_today': 'Équipes - Aujourd\'hui'
+        }
+        
+        return render(request, 'league_results.html', {
+            'league': league,
+            'competition': competition,
+            'stages': stages,
+            'selected_stage': selected_stage,
+            'results': results,
+            'tab_labels': tab_labels,
         })

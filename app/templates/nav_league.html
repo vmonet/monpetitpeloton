@@ -30,6 +30,9 @@
     <li class="nav-item">
       <a class="nav-link {% if request.resolver_match.url_name == 'peloton_view' %}active{% endif %}" href="{% url 'peloton_view' league_id %}">Peloton</a>
     </li>
+    <li class="nav-item">
+      <a class="nav-link {% if request.resolver_match.url_name == 'league_results' %}active{% endif %}" href="{% url 'league_results' league_id %}">Résultats</a>
+    </li>
     {% endif %}
   </ul>
 </nav> 
