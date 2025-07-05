@@ -13,3 +13,4 @@ uvicorn==0.34.3
 whitenoise==6.9.0
 django-allauth>=0.54.0
 django-widget-tweaks>=1.4.12
+beautifulsoup4
