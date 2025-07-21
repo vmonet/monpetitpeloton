@@ -505,22 +505,59 @@ class StageSelectionView(LoginRequiredMixin, View):
             'selection': selection,
         })
 
+def get_current_stage(competition):
+    """
+    Returns the current stage of the competition.
+    If there's a stage today, returns that stage.
+    If not, returns the next upcoming stage.
+    If no upcoming stages, returns the last stage.
+    """
+    today = timezone.localtime().date()
+    
+    # Try to get today's stage
+    stage = Stage.objects.filter(
+        competition=competition,
+        date=today
+    ).first()
+    
+    if not stage:
+        # Try to get the next stage
+        stage = Stage.objects.filter(
+            competition=competition,
+            date__gt=today
+        ).order_by('date').first()
+        
+        if not stage:
+            # If no upcoming stage, get the last stage
+            stage = Stage.objects.filter(
+                competition=competition,
+                date__lt=today
+            ).order_by('-date').first()
+    
+    return stage
+
 class StageSelectionLeagueView(LoginRequiredMixin, View):
     """
     Page for selecting the team for a stage in a league. Shows a stage selector, available riders (left), and current selection (right).
     """
     def get(self, request, league_id, *args, **kwargs):
-        league = get_object_or_404(League.objects.select_related('competition'), id=league_id)
-        team = Team.objects.select_related('player', 'league').filter(player=request.user, league=league).first()
+        league = get_object_or_404(League, id=league_id)
+        stages = Stage.objects.filter(competition=league.competition).order_by('date')
+        stage_id = request.GET.get('stage')
+        
+        if stage_id:
+            stage = get_object_or_404(Stage, id=stage_id)
+        else:
+            stage = get_current_stage(league.competition) or stages.first()
+            
+        team = Team.objects.filter(player=request.user, league=league).first()
         if not team:
             return HttpResponseForbidden("You are not a member of this league.")
-        stages = list(Stage.objects.filter(competition=league.competition).order_by('date'))
-        stage_id = request.GET.get('stage')
-        stage = get_object_or_404(Stage, id=stage_id) if stage_id else stages[0]
+
         roles = list(Role.objects.all().order_by('order'))
-        unique_role_ids = list(Role.objects.filter(name__in=['Leader', 'Sprinteur', 'Grimpeur']).order_by('order').values_list('id', flat=True))
+        unique_role_ids = list(Role.objects.filter(name__in=['leader', 'sprinteur', 'grimpeur']).order_by('order').values_list('id', flat=True))
+        
         # --- Default selection logic with optimized queries ---
-        from .models import DefaultStageSelection, DefaultStageSelectionRider
         default_selection = DefaultStageSelection.objects.prefetch_related(
             Prefetch('riders', queryset=DefaultStageSelectionRider.objects.select_related('cyclist', 'role'))
         ).filter(team=team).order_by('-created_at').first()
@@ -799,51 +836,53 @@ class StageSelectionLeagueView(LoginRequiredMixin, View):
         })
 
 class PelotonView(LoginRequiredMixin, View):
-    """
-    View to display all teams' selections for a given stage in a league. Stage selector + table of selections.
-    """
     def get(self, request, league_id, *args, **kwargs):
         league = get_object_or_404(League, id=league_id)
         stages = Stage.objects.filter(competition=league.competition).order_by('date')
         stage_id = request.GET.get('stage')
-        stage = get_object_or_404(Stage, id=stage_id) if stage_id else stages.first()
-        teams = Team.objects.filter(league=league).select_related('player')
-        team_ids = [team.id for team in teams]
-        # Batch fetch all StageSelections for these teams and this stage, prefetch selection_riders, cyclist, and role
-        selection_qs = StageSelection.objects.filter(team_id__in=team_ids, stage=stage).order_by('-submitted_at')
-        selection_qs = selection_qs.prefetch_related(
-            Prefetch('selection_riders', queryset=StageSelectionRider.objects.select_related('cyclist', 'role'))
-        )
-        # For each team, get the latest validated selection, or latest unvalidated if none
-        selections_by_team = {}
-        for sel in selection_qs:
-            if sel.validated:
-                if sel.team_id not in selections_by_team:
-                    selections_by_team[sel.team_id] = sel
-            elif sel.team_id not in selections_by_team:
-                selections_by_team[sel.team_id] = sel
+        
+        if stage_id:
+            stage = get_object_or_404(Stage, id=stage_id)
+        else:
+            stage = get_current_stage(league.competition) or stages.first()
+            
+        teams = Team.objects.filter(league=league)
+
+        # Check if we're past noon on race day
+        now = timezone.localtime()
+        lock_time = timezone.make_aware(datetime.combine(stage.date, dt_time(12, 0)))
+        locked = now >= lock_time
+
         selections = {}
         for team in teams:
-            selection = selections_by_team.get(team.id)
+            selection = StageSelection.objects.filter(
+                team=team,
+                stage=stage,
+                validated=True
+            ).prefetch_related(
+                'selection_riders__cyclist',
+                'selection_riders__role',
+                'stageselectionbonus_set__bonus'
+            ).first()
             if selection:
-                # Trier par role.order, None à la fin
-                selection_items = [
-                    {'cyclist': sr.cyclist, 'role': sr.role} for sr in selection.selection_riders.all()
-                ]
-                selection_items_sorted = sorted(
-                    selection_items,
-                    key=lambda item: item['role'].order if item['role'] is not None else 999
+                # Sort riders by role order
+                riders = list(selection.selection_riders.all())
+                riders_sorted = sorted(
+                    riders,
+                    key=lambda rider: rider.role.order if rider.role else 999
                 )
-                selections[team.id] = selection_items_sorted
-            else:
-                selections[team.id] = []
+                selections[team.id] = {
+                    'riders': riders_sorted,
+                    'bonuses': list(selection.stageselectionbonus_set.all())
+                }
+
         return render(request, 'peloton_view.html', {
             'league': league,
             'stages': stages,
             'stage': stage,
             'teams': teams,
             'selections': selections,
-            'auction_finished': league.auction_finished,
+            'locked': locked,
         })
 
 @method_decorator(login_required, name='dispatch')

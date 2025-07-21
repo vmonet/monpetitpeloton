@@ -18,7 +18,7 @@
       <ul style="list-style:none;padding:0;">
         {% with selection=selections|dict_get:team.id %}
           {% if selection %}
-            {% for item in selection %}
+            {% for item in selection.riders %}
               <li>
                 {{ item.cyclist.name }} <small>({{ item.cyclist.team }})</small>
                 {% if item.role %}
@@ -36,6 +36,14 @@
                 {% endif %}
               </li>
             {% endfor %}
+            {% if locked and selection.bonuses %}
+              <li style="margin-top:1em;">
+                <strong>Bonus :</strong>
+                {% for bonus in selection.bonuses %}
+                  <span class="badge bg-warning text-dark" style="margin-left:0.5em;">{{ bonus.bonus.name }}</span>
+                {% endfor %}
+              </li>
+            {% endif %}
           {% else %}
             <li><em>Aucune sélection pour cette étape.</em></li>
           {% endif %}
